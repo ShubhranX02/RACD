@@ -10,25 +10,25 @@ Vinp vin_p 0 DC 0.9 PULSE(0.9 1.0 0 10p 10p 200p 10n)
 Vinn vin_n 0 DC 0.9 PULSE(0.9 0.8 0 10p 10p 200p 10n)
 
 
-XM1 voutn vin_p s1 0 sky130_fd_pr__nfet_01v8 w=3.7548835277557373 l=0.15
-XM2 voutp vin_n s2 0 sky130_fd_pr__nfet_01v8 w=3.7548835277557373 l=0.15
+XM1 voutn vin_p s1 0 sky130_fd_pr__nfet_01v8 w=20.0 l=0.15
+XM2 voutp vin_n s2 0 sky130_fd_pr__nfet_01v8 w=20.0 l=0.15
 
-Rs s1 s2 1000.0
-Cs s1 s2 9.55177560310605e-13
+Rs s1 s2 817.7469482421875
+Cs s1 s2 3.0575190816672926e-12
 
 Itail1 s1 0 DC 100.0u
 Itail2 s2 0 DC 100.0u
 
-RL1 vdd voutn 1499.058349609375
-RL2 vdd voutp 1499.058349609375
+RL1 vdd voutn 2799.228271484375
+RL2 vdd voutp 2799.228271484375
 
 * 1-Tap DFE (Fully Differential)
 Bslice_p vslice_p 0 V = V(voutp,voutn) > 0 ? 0.1 : -0.1
 Bslice_n vslice_n 0 V = V(voutp,voutn) < 0 ? 0.1 : -0.1
 Tdelay_p vslice_p 0 vdelayed_p 0 Z0=50 TD=200p
 Tdelay_n vslice_n 0 vdelayed_n 0 Z0=50 TD=200p
-Rdfe1 vdelayed_p voutp 1000.0
-Rdfe2 vdelayed_n voutn 1000.0
+Rdfe1 vdelayed_p voutp 40357.71875
+Rdfe2 vdelayed_n voutn 40357.71875
 
 .control
 tran 2p 2n
