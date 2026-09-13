@@ -1,4 +1,18 @@
-<!DOCTYPE html><html><head><style>body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 40px auto; max-width: 800px; color: #333; } h1, h2, h3 { color: #2c3e50; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; } code { background: #f6f8fa; padding: 0.2em 0.4em; border-radius: 6px; font-size: 85%; font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace; } pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; } pre code { background: transparent; padding: 0; } table { border-collapse: collapse; width: 100%; margin-top: 1em; margin-bottom: 1em; } th, td { border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left; } th { background-color: #f6f8fa; font-weight: 600; }</style></head><body><h1>RACD: Retrieval-Augmented Circuit Design</h1>
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; margin: 50px auto; max-width: 780px; color: #333; font-size: 14px; }
+h1 { color: #1a1a2e; font-size: 28px; text-align: center; margin-bottom: 5px; }
+h2 { color: #16213e; font-size: 20px; border-bottom: 2px solid #0f3460; padding-bottom: 6px; margin-top: 30px; }
+h3 { color: #0f3460; font-size: 16px; margin-top: 20px; }
+code { background: #f0f4f8; padding: 0.2em 0.4em; border-radius: 4px; font-size: 85%%; font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace; }
+pre { background: #f0f4f8; padding: 16px; border-radius: 6px; overflow: auto; border: 1px solid #dce1e8; }
+pre code { background: transparent; padding: 0; }
+table { border-collapse: collapse; width: 100%%; margin: 1em 0; }
+th, td { border: 1px solid #dfe2e5; padding: 8px 12px; text-align: left; font-size: 13px; }
+th { background-color: #0f3460; color: white; font-weight: 600; }
+tr:nth-child(even) { background-color: #f8f9fa; }
+hr { border: none; border-top: 2px solid #0f3460; margin: 30px 0; }
+strong { color: #1a1a2e; }
+</style></head><body><h1>RACD: Retrieval-Augmented Circuit Design</h1>
 <h2>Final Project Report</h2>
 <p><strong>Autonomous RL-Driven High-Speed Link Equalization</strong></p>
 <hr />
@@ -9,12 +23,12 @@
 <h2>2. Problem Context and Formulation</h2>
 <p>High-speed serial link receivers must compensate for frequency-dependent channel attenuation. The project specifies a target of 5.0 Gbps (Nyquist frequency of 2.5 GHz), requiring a tunable high-frequency (HF) peaking boost of 3–12 dB while minimizing noise, minimizing power consumption, and maintaining linearity. </p>
 <h3>2.1 The Traditional Bottleneck</h3>
-<p>Analog design optimization is typically done via nested parameter sweeps. For a topology with 6 variables (e.g., Width, $R_s$, $C_s$, $I_{tail}$, $R_L$, $R_{dfe}$), sweeping each variable across 10 points yields 1,000,000 simulations. Multiplying this by 45 PVT conditions creates an intractable search space.</p>
+<p>Analog design optimization is typically done via nested parameter sweeps. For a topology with 6 variables (e.g., Width, Rs, Cs, Itail, RL, Rdfe), sweeping each variable across 10 points yields 1,000,000 simulations. Multiplying this by 45 PVT conditions creates an intractable search space.</p>
 <h3>2.2 The RL Paradigm</h3>
 <p>We formulate equalizer design as a Markov Decision Process (MDP).
 *   <strong>State Space</strong>: The target specification (e.g., Target Peaking in dB).
 *   <strong>Action Space</strong>: The continuous component values (Resistors, Capacitors, Transistor dimensions, Biasing currents).
-*   <strong>Reward Function</strong>: A dense, physics-informed scalar that penalizes constraint violations (e.g., Power $&gt; 15$ mW) while rewarding the minimization of the error between the simulated HF peaking and the target peaking.</p>
+*   <strong>Reward Function</strong>: A dense, physics-informed scalar that penalizes constraint violations (e.g., Power &gt; 15 mW) while rewarding the minimization of the error between the simulated HF peaking and the target peaking.</p>
 <p>By training a Proximal Policy Optimization (PPO) agent on this MDP, the model learns the inverse function of the circuit: mapping desired performance directly to optimal component sizing in a single inference step.</p>
 <div style="page-break-after: always;"></div>
 
@@ -24,11 +38,11 @@
 2.  <strong>Reinforcement Learning</strong>: Continuous control via Proximal Policy Optimization (PPO).
 3.  <strong>Agentic Orchestration</strong>: An LLM-based coordinator that interfaces with the user, queries the RL model, and extracts insights from a historical design repository.</p>
 <h3>3.1 Mathematical Formulation of the Reinforcement Learning Loop</h3>
-<p>We utilize the Proximal Policy Optimization (PPO) algorithm, an actor-critic method that optimizes a surrogate objective function. Let $s_t$ be the target peaking, and $a_t$ be the chosen component sizes. </p>
-<p>The policy network $\pi_\theta(a_t | s_t)$ outputs a multivariate Gaussian distribution over the component values. The critic network $V_\phi(s_t)$ estimates the expected return.</p>
-<p>The surrogate objective is maximized during training:
-$$ L^{CLIP}(\theta) = \hat{\mathbb{E}}_t [ \min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t) ] $$</p>
-<p>Where $r_t(\theta)$ is the probability ratio between the new and old policy, and $\hat{A}_t$ is the estimated advantage. </p>
+<p>We utilize the Proximal Policy Optimization (PPO) algorithm, an actor-critic method that optimizes a surrogate objective function. Let sₜ be the target peaking, and aₜ be the chosen component sizes. </p>
+<p>The policy network πθ(aₜ | sₜ) outputs a multivariate Gaussian distribution over the component values. The critic network Vφ(sₜ) estimates the expected return.</p>
+<p>The surrogate objective is maximized during training:</p>
+<p><strong>L_CLIP(θ) = Ê_t [ min( rₜ(θ) · Âₜ , clip(rₜ(θ), 1−ε, 1+ε) · Âₜ ) ]</strong></p>
+<p>Where rₜ(θ) is the probability ratio between the new and old policy, and Âₜ is the estimated advantage. </p>
 <h3>3.2 Simulation Strategy (Innovation Highlight)</h3>
 <p>A significant bottleneck in open-source EDA is the fragility of Python-to-SPICE wrappers (like PySpice). An early innovation in this project was the decision to bypass these wrappers entirely. The framework generates raw SPICE netlists dynamically in memory, executes <code>ngspice -b</code> as a detached subprocess, and parses the raw standard output and <code>.data</code> files. This decoupled approach proved immune to library version conflicts and allowed for extremely fast, parallelizable evaluation.</p>
 <pre><code class="language-python"># Example of the robust subprocess simulator paradigm
@@ -44,22 +58,22 @@ def _run_ngspice(netlist_content, label=&quot;sim&quot;):
 <h2>4. Stage A: Passive Component Equalization</h2>
 <p>The project began with a simplified RC bridge topology to validate the RL loop.</p>
 <h3>4.1 Topology and Transfer Function</h3>
-<p>The Stage A circuit consists of a source resistance, and a bridged RC network ($R_s$ in parallel with $C_s$) feeding into a load. The transfer function $H(s)$ exhibits a low-frequency pole and a high-frequency zero. By tuning $R_s$ and $C_s$, we can position the zero to cancel out channel loss at the Nyquist frequency.</p>
-<p>$$ H(s) = \frac{V_{out}(s)}{V_{in}(s)} \approx \frac{1 + s R_s C_s}{1 + s (R_s + R_{load}) C_s} $$</p>
+<p>The Stage A circuit consists of a source resistance, and a bridged RC network (Rs in parallel with Cs) feeding into a load. The transfer function H(s) exhibits a low-frequency pole and a high-frequency zero. By tuning Rs and Cs, we can position the zero to cancel out channel loss at the Nyquist frequency.</p>
+<p><strong>H(s) = Vout(s) / Vin(s) ≈ (1 + s·Rs·Cs) / (1 + s·(Rs + Rload)·Cs)</strong></p>
 <h3>4.2 Implementation</h3>
 <ul>
 <li><strong>Environment</strong>: A custom Gymnasium environment (<code>environment.py</code>) was created. </li>
-<li><strong>Action Space</strong>: Tuning series/parallel resistors and capacitors ($R_{s}, C_{s}$).</li>
-<li><strong>Constraints</strong>: Maximize high-frequency transmission ($S_{21}$ at 2.5 GHz) while holding low-frequency transmission steady.</li>
+<li><strong>Action Space</strong>: Tuning series/parallel resistors and capacitors (Rs, Cs).</li>
+<li><strong>Constraints</strong>: Maximize high-frequency transmission (S₂₁ at 2.5 GHz) while holding low-frequency transmission steady.</li>
 </ul>
 <h3>4.3 Results and Limitations</h3>
-<p>The PPO agent successfully learned the relationship between $R_s$, $C_s$, and the resulting frequency pole/zero locations. However, as derived from basic circuit theory, a purely passive RC network cannot provide active voltage gain, structurally limiting the maximum achievable peaking to ~11 dB rather than the target 12 dB. This theoretical limitation motivated the progression to the transistor-level Stage B.</p>
+<p>The PPO agent successfully learned the relationship between Rs, Cs, and the resulting frequency pole/zero locations. However, as derived from basic circuit theory, a purely passive RC network cannot provide active voltage gain, structurally limiting the maximum achievable peaking to ~11 dB rather than the target 12 dB. This theoretical limitation motivated the progression to the transistor-level Stage B.</p>
 <div style="page-break-after: always;"></div>
 
 <h2>5. Offline RL &amp; Warm-starting</h2>
 <p>To accelerate training and demonstrate advanced RL techniques, a Behavior Cloning (BC) pipeline was implemented.</p>
 <h3>5.1 Data Generation and Repository</h3>
-<p>As the PPO agent explored the state space during training, all design parameters and corresponding simulation metrics were saved to a persistent JSONL repository. This created a large, offline dataset of (Target Spec $\rightarrow$ Component Values).</p>
+<p>As the PPO agent explored the state space during training, all design parameters and corresponding simulation metrics were saved to a persistent JSONL repository. This created a large, offline dataset of (Target Spec → Component Values).</p>
 <h3>5.2 Behavior Cloning (Warm-start)</h3>
 <p>Instead of forcing the PPO neural network to learn the circuit physics from scratch via random initialization, we implemented a supervised learning pre-training phase (<code>warmstart.py</code>). The network was trained to mimic the best historical designs in the repository using Mean Squared Error (MSE) loss.</p>
 <pre><code class="language-python"># The Behavior Cloning Loss Function
@@ -87,8 +101,8 @@ optimizer.step()
 <p>The capstone of the project is the full transistor-level implementation, built entirely using the open-source SKY130 PDK.</p>
 <h3>7.1 Circuit Topology</h3>
 <p>The design features a Fully-Differential Continuous-Time Linear Equalizer (CTLE) coupled with a 1-Tap Decision Feedback Equalizer (DFE).
-*   <strong>CTLE</strong>: Differential pair using <code>sky130_fd_pr__nfet_01v8</code> devices. Includes source degeneration ($R_s, C_s$) to generate the high-frequency boosting zero, and tunable load resistors ($R_L$) and tail current ($I_{tail}$).
-*   <strong>DFE</strong>: A fully differential 1-tap feedback loop with a 200ps transmission line delay (matching the 5.0 Gbps unit interval), injecting a corrective signal proportional to $R_{dfe}$.</p>
+*   <strong>CTLE</strong>: Differential pair using <code>sky130_fd_pr__nfet_01v8</code> devices. Includes source degeneration (Rs, Cs) to generate the high-frequency boosting zero, and tunable load resistors (RL) and tail current (Itail).
+*   <strong>DFE</strong>: A fully differential 1-tap feedback loop with a 200ps transmission line delay (matching the 5.0 Gbps unit interval), injecting a corrective signal proportional to Rdfe.</p>
 <pre><code class="language-spice">* 1-Tap DFE (Fully Differential) SPICE Implementation
 Bslice_p vslice_p 0 V = V(voutp,voutn) &gt; 0 ? 0.1 : -0.1
 Bslice_n vslice_n 0 V = V(voutp,voutn) &lt; 0 ? 0.1 : -0.1
@@ -98,12 +112,12 @@ Rdfe1 vdelayed_p voutp {Rdfe_ohm}
 Rdfe2 vdelayed_n voutn {Rdfe_ohm}
 </code></pre>
 <h3>7.2 Multi-Constraint Optimization</h3>
-<p>The action space was expanded to six dimensions: $[W_n, R_s, C_s, I_{tail}, R_L, R_{dfe}]$. The RL environment was deeply modified to enforce the rigorous project constraints:
+<p>The action space was expanded to six dimensions: [Wn, Rs, Cs, Itail, RL, Rdfe]. The RL environment was deeply modified to enforce the rigorous project constraints:
 1.  <strong>Peaking</strong>: 3–12 dB (tunable 1.25–2.5 GHz).
-2.  <strong>Linearity (HD3)</strong>: $&lt; -30$ dB (100 MHz diff input).
-3.  <strong>Noise</strong>: $&lt; 1.5$ mVrms (integrated 10 MHz–5 GHz).
-4.  <strong>Power</strong>: $&lt; 15$ mW.
-5.  <strong>Eye Opening</strong>: $&gt; 100$ mV.</p>
+2.  <strong>Linearity (HD3)</strong>: &lt; -30 dB (100 MHz diff input).
+3.  <strong>Noise</strong>: &lt; 1.5 mVrms (integrated 10 MHz–5 GHz).
+4.  <strong>Power</strong>: &lt; 15 mW.
+5.  <strong>Eye Opening</strong>: &gt; 100 mV.</p>
 <p>The custom Gym environment (<code>environment_transistor.py</code>) calculates a dense reward based on the normalized errors of these metrics:</p>
 <pre><code class="language-python">peaking_error = abs(result['peaking_db'] - target_peaking) / peaking_span
 noise_penalty = max(0.0, (result['noise'] - 1.5) / 1.5)
@@ -120,20 +134,20 @@ reward = -(peaking_error + noise_penalty + power_penalty)
 <h3>7.4 Multi-Corner PVT Validation</h3>
 <p>Because analog circuits are susceptible to manufacturing and environmental variations, the final deliverable includes a comprehensive PVT validation script (<code>validate_pvt.py</code>). The script evaluates the trained agent's candidate design across a 45-point matrix:
 *   <strong>Corners</strong>: TT, SS, FF, SF, FS
-*   <strong>Voltages</strong>: 1.71 V, 1.80 V, 1.89 V ($\pm 5\%$)
-*   <strong>Temperatures</strong>: $0^\circ$C, $27^\circ$C, $125^\circ$C</p>
+*   <strong>Voltages</strong>: 1.71 V, 1.80 V, 1.89 V (±5%)
+*   <strong>Temperatures</strong>: 0°C, 27°C, 125°C</p>
 <p>This ensures that the AI-generated design is robust, reproducible, and ready for tape-out consideration.</p>
 <div style="page-break-after: always;"></div>
 
 <h2>8. Detailed PVT Results Matrix</h2>
 <p>To illustrate the success of the autonomous design framework, we present the extracted parameters the agent chose for a target 8.0 dB peaking constraint, validated across the worst-case Process, Voltage, and Temperature corners.</p>
 <p><strong>Extracted Final Device Geometries and Values:</strong>
-*   <strong>Width ($W_n$)</strong>: $9.67\,\mu\text{m}$
-*   <strong>Source Degeneration ($R_s$)</strong>: $572.6\,\Omega$
-*   <strong>Source Degeneration ($C_s$)</strong>: $2.44\,\text{pF}$
-*   <strong>Tail Current ($I_{\text{tail}}$)</strong>: $926.0\,\mu\text{A}$ per side
-*   <strong>Load Resistor ($R_L$)</strong>: $2491.4\,\Omega$
-*   <strong>DFE Feedback ($R_{\text{dfe}}$)</strong>: $24.7\,\text{k}\Omega$</p>
+*   <strong>Width (Wn)</strong>: 9.67 μm
+*   <strong>Source Degeneration (Rs)</strong>: 572.6 Ω
+*   <strong>Source Degeneration (Cs)</strong>: 2.44 pF
+*   <strong>Tail Current (Itail)</strong>: 926.0 μA per side
+*   <strong>Load Resistor (RL)</strong>: 2491.4 Ω
+*   <strong>DFE Feedback (Rdfe)</strong>: 24.7 kΩ</p>
 <p><em>Sample output from the 45-point validation matrix:</em></p>
 <table>
 <thead>
@@ -185,7 +199,7 @@ reward = -(peaking_error + noise_penalty + power_penalty)
 <li><strong>Embracing Subprocesses over APIs</strong>: Early in the project, PySpice/InSpice dependencies proved incompatible with modern environments. Rather than force a brittle integration, the project pivoted to string-based netlist generation and subprocess execution. This drastically improved robustness and debugging visibility.</li>
 <li><strong>Decoupling Training from PVT</strong>: Incorporating PVT variations <em>inside</em> the RL training loop is a common pitfall that makes the state space too large to converge. The thought process here was to adopt industry-standard methodologies: train on the nominal corner (TT/27C/1.8V) to learn the inverse function, then validate the resulting design across PVT.</li>
 <li><strong>Agentic Fallbacks</strong>: The LLM orchestrator is designed not just to blindly query the RL model, but to cross-reference the RL model's suggestion against historical data in the JSONL repository. If the RL model suggests an unstable design, the repository acts as a safety net.</li>
-<li><strong>Hardware-Accelerated Dual-Path Simulation</strong>: Recognizing that transient analysis (HD3 and PRBS eye tracking) is $O(n^2)$ computationally expensive in SPICE, we replaced it with AC-based linear proxies during the exploration phase. This represents a 7.5x speedup and allows hyper-parameter convergence in hours rather than weeks.</li>
+<li><strong>Hardware-Accelerated Dual-Path Simulation</strong>: Recognizing that transient analysis (HD3 and PRBS eye tracking) is O(n²) computationally expensive in SPICE, we replaced it with AC-based linear proxies during the exploration phase. This represents a 7.5x speedup and allows hyper-parameter convergence in hours rather than weeks.</li>
 </ol>
 <div style="page-break-after: always;"></div>
 
