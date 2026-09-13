@@ -1,0 +1,36 @@
+HD3 Test
+
+.lib "/Users/shubhransharma/.ciel/ciel/sky130/versions/bdc9412b3e468c102d01b7cf6337be06ec6e9c9a/sky130A/libs.tech/ngspice/sky130.lib.spice" tt
+.option temp=27
+.option scale=1u
+
+Vdd vdd 0 1.8
+
+Vinp vin_p 0 DC 0.9 SINE(0.9 0.05 100Meg)
+Vinn vin_n 0 DC 0.9 SINE(0.9 -0.05 100Meg)
+
+
+XM1 voutn vin_p s1 0 sky130_fd_pr__nfet_01v8 w=4 l=0.15
+XM2 voutp vin_n s2 0 sky130_fd_pr__nfet_01v8 w=4 l=0.15
+
+Rs s1 s2 200
+Cs s1 s2 2e-12
+
+Itail1 s1 0 DC 400u
+Itail2 s2 0 DC 400u
+
+RL1 vdd voutn 2000
+RL2 vdd voutp 2000
+
+* 1-Tap DFE 
+Bslice vslice 0 V = V(voutp,voutn) > 0 ? 0.1 : -0.1
+* 200ps delay for 5Gbps (PCIe Gen2)
+Tdelay vslice 0 vdelayed 0 Z0=50 TD=200p
+Rdfe vdelayed voutp 10000
+* For a fully differential DFE, we'd add the inverted path to voutn, but we'll stick to a simple proxy here.
+
+.control
+tran 10p 50n
+fourier 100Meg v(voutp,voutn)
+.endc
+.end

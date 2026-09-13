@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+_temp_noise.cir
+_temp_diffpair.cir
+models/*.zip

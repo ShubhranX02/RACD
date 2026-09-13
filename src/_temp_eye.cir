@@ -1,0 +1,15 @@
+Channel + Equalizer - Pulse Response
+Vin in 0 PULSE(0 1 0 10p 10p 200p 10n)
+
+Rch in ch_out 50
+Cch ch_out 0 3e-12
+
+Rs ch_out mid 449.5925598144531
+Cs ch_out mid 9.136131955134186e-12
+RL mid 0 200
+
+.control
+tran 1p 2n
+wrdata _temp_eye_data v(mid)
+.endc
+.end
