@@ -41,8 +41,11 @@ strong { color: #1a1a2e; }
 <p>We utilize the Proximal Policy Optimization (PPO) algorithm, an actor-critic method that optimizes a surrogate objective function. Let sₜ be the target peaking, and aₜ be the chosen component sizes. </p>
 <p>The policy network πθ(aₜ | sₜ) outputs a multivariate Gaussian distribution over the component values. The critic network Vφ(sₜ) estimates the expected return.</p>
 <p>The surrogate objective is maximized during training:</p>
-<p><strong>L_CLIP(θ) = Ê_t [ min( rₜ(θ) · Âₜ , clip(rₜ(θ), 1−ε, 1+ε) · Âₜ ) ]</strong></p>
-<p>Where rₜ(θ) is the probability ratio between the new and old policy, and Âₜ is the estimated advantage. </p>
+<div style="text-align:center; margin:20px 0; padding:15px; background:#f0f4f8; border-radius:8px; font-family:'Times New Roman',serif; font-size:18px; font-style:italic;">
+L<sup>CLIP</sup>(θ) = 𝔼̂<sub>t</sub> [ min( r<sub>t</sub>(θ) · Â<sub>t</sub> , clip( r<sub>t</sub>(θ), 1 − ε, 1 + ε ) · Â<sub>t</sub> ) ]
+</div>
+
+<p>Where r<sub>t</sub>(θ) is the probability ratio between the new and old policy, and Â<sub>t</sub> is the estimated advantage. </p>
 <h3>3.2 Simulation Strategy (Innovation Highlight)</h3>
 <p>A significant bottleneck in open-source EDA is the fragility of Python-to-SPICE wrappers (like PySpice). An early innovation in this project was the decision to bypass these wrappers entirely. The framework generates raw SPICE netlists dynamically in memory, executes <code>ngspice -b</code> as a detached subprocess, and parses the raw standard output and <code>.data</code> files. This decoupled approach proved immune to library version conflicts and allowed for extremely fast, parallelizable evaluation.</p>
 <pre><code class="language-python"># Example of the robust subprocess simulator paradigm
@@ -59,7 +62,10 @@ def _run_ngspice(netlist_content, label=&quot;sim&quot;):
 <p>The project began with a simplified RC bridge topology to validate the RL loop.</p>
 <h3>4.1 Topology and Transfer Function</h3>
 <p>The Stage A circuit consists of a source resistance, and a bridged RC network (Rs in parallel with Cs) feeding into a load. The transfer function H(s) exhibits a low-frequency pole and a high-frequency zero. By tuning Rs and Cs, we can position the zero to cancel out channel loss at the Nyquist frequency.</p>
-<p><strong>H(s) = Vout(s) / Vin(s) ≈ (1 + s·Rs·Cs) / (1 + s·(Rs + Rload)·Cs)</strong></p>
+<div style="text-align:center; margin:20px 0; padding:15px; background:#f0f4f8; border-radius:8px; font-family:'Times New Roman',serif; font-size:18px; font-style:italic;">
+H(s) = V<sub>out</sub>(s) / V<sub>in</sub>(s) ≈ (1 + s · R<sub>s</sub> · C<sub>s</sub>) / (1 + s · (R<sub>s</sub> + R<sub>load</sub>) · C<sub>s</sub>)
+</div>
+
 <h3>4.2 Implementation</h3>
 <ul>
 <li><strong>Environment</strong>: A custom Gymnasium environment (<code>environment.py</code>) was created. </li>
