@@ -1,0 +1,62 @@
+[
+  {
+    "corner": "TT",
+    "vdd": 1.8,
+    "temp": 27,
+    "peaking_db": 8.12424649141,
+    "hd3_db": -33.99487474637801,
+    "noise_mvrms": 0.6261922,
+    "power_mw": 5.681808,
+    "eye_height_mv": 481.321128,
+    "area_mm2": 0.01879632629319703,
+    "status": "PASS"
+  },
+  {
+    "corner": "SS",
+    "vdd": 1.71,
+    "temp": 125,
+    "peaking_db": 7.3565062999999995,
+    "hd3_db": -28.582372582041124,
+    "noise_mvrms": 0.8449966,
+    "power_mw": 5.3862606,
+    "eye_height_mv": 374.48371099999997,
+    "area_mm2": 0.01879632629319703,
+    "status": "MARGINAL"
+  },
+  {
+    "corner": "FF",
+    "vdd": 1.89,
+    "temp": 0,
+    "peaking_db": 7.8889744801,
+    "hd3_db": -30.591496146923234,
+    "noise_mvrms": 0.5664771000000001,
+    "power_mw": 5.9785803,
+    "eye_height_mv": 494.16447400000004,
+    "area_mm2": 0.01879632629319703,
+    "status": "PASS"
+  },
+  {
+    "corner": "SF",
+    "vdd": 1.8,
+    "temp": 27,
+    "peaking_db": 7.5970408140000005,
+    "hd3_db": -32.71874078556282,
+    "noise_mvrms": 0.6056806,
+    "power_mw": 5.681808,
+    "eye_height_mv": 451.360705,
+    "area_mm2": 0.01879632629319703,
+    "status": "PASS"
+  },
+  {
+    "corner": "FS",
+    "vdd": 1.8,
+    "temp": 27,
+    "peaking_db": 8.644051300000001,
+    "hd3_db": -29.07087420956116,
+    "noise_mvrms": 0.6515527999999999,
+    "power_mw": 5.681790000000001,
+    "eye_height_mv": 538.626069,
+    "area_mm2": 0.01879632629319703,
+    "status": "MARGINAL"
+  }
+]

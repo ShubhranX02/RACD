@@ -4,6 +4,10 @@ import numpy as np
 import os
 import tempfile
 
+# Ensure ngspice is discoverable if installed in standard location
+if os.path.exists(r"C:\Spice64\bin") and r"C:\Spice64\bin" not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = r"C:\Spice64\bin;" + os.environ.get("PATH", "")
+
 # Fixed lossy channel model (approximates PCB trace loss ahead of the
 # equalizer). NOT tunable by the RL agent -- represents a given physical
 # constraint, not a design choice.

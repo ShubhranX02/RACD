@@ -1,6 +1,9 @@
 import numpy as np
 from stable_baselines3 import PPO
-from environment import EqualizerEnv
+try:
+    from environment_fast import EqualizerEnvFast as EqualizerEnv
+except ImportError:
+    from environment import EqualizerEnv
 from logging_utils import load_repository
 from retrieval import retrieve_k_nearest, rs_cs_to_action
 from warmstart import pretrain_policy_toward_retrieved

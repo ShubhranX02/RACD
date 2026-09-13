@@ -1,5 +1,5 @@
 * Single SKY130 NMOS transistor - DC operating point test
-.lib "/Users/shubhransharma/.ciel/ciel/sky130/versions/bdc9412b3e468c102d01b7cf6337be06ec6e9c9a/sky130A/libs.tech/ngspice/sky130.lib.spice" tt
+.lib "C:/Users/Kio/.ciel/ciel/sky130/versions/bdc9412b3e468c102d01b7cf6337be06ec6e9c9a/sky130A/libs.tech/ngspice/sky130.lib.spice" tt
 
 Vdd vdd 0 1.8
 Vgate gate 0 0.9
