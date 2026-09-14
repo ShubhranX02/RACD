@@ -53,8 +53,8 @@ def _extract_spec_vector(r: dict) -> np.ndarray:
     noise = float(r.get("noise_mvrms", 0.0)) / _SPEC_SCALES["noise_mvrms"]
     power = float(r.get("power_mw", 0.0)) / _SPEC_SCALES["power_mw"]
     eye = float(r.get("eye_height_proxy_mv", 0.0)) / _SPEC_SCALES["eye_height_proxy_mv"]
-    # Weight peaking 3x higher in L2 distance than secondary constraints
-    return np.array([3.0 * peaking, noise, power, eye], dtype=np.float32)
+    # Weight peaking 10x higher in L2 distance to strictly prioritize target specification accuracy
+    return np.array([10.0 * peaking, noise, power, eye], dtype=np.float32)
 
 
 def build_transistor_faiss_index(
@@ -184,8 +184,8 @@ def retrieve_k_nearest_transistor(
     }
     query_vec = _extract_spec_vector(query_spec).reshape(1, -1)
 
-    # Search for an expanded pool (4x) to allow post-filtering on constraints and corner
-    fetch_k = min(max(k * 4, 30), len(metadata))
+    # Search for an expanded pool to allow post-filtering on constraints and corner
+    fetch_k = min(max(k * 10, 200), len(metadata))
     distances, indices = index.search(query_vec, fetch_k)
 
     results = []

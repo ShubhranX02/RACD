@@ -170,11 +170,11 @@ if st.button("🚀 Design Circuit", type="primary"):
 
         # -----------------------------------------------------------------
         # Refinement Decision:
-        # If retrieval is already verified within <= 0.4 dB of target, use it directly!
+        # If retrieval is already verified within <= 0.5 dB of target, use it directly!
         # Do NOT let an approximate neural surrogate corrupt a SPICE-verified sizing.
         # Otherwise, run Trust-Region bounded optimization on the surrogate.
         # -----------------------------------------------------------------
-        if USE_RETRIEVAL_DIRECT and retrieval_error <= 0.4:
+        if USE_RETRIEVAL_DIRECT and retrieval_error <= 0.5:
             surrogate_peaking_after = pk
             method_label = f"SPICE-verified retrieval (Δ = {retrieval_error:.2f} dB, exact match)"
         else:
@@ -232,7 +232,7 @@ if st.button("🚀 Design Circuit", type="primary"):
         # When using a verified retrieval match directly in fast mode (no ngspice),
         # preserve the ground-truth SPICE metrics from the repository instead of
         # overwriting them with the surrogate's approximation.
-        if USE_RETRIEVAL_DIRECT and retrieval_error <= 0.4 and not force_spice and retrieved:
+        if USE_RETRIEVAL_DIRECT and retrieval_error <= 0.5 and not force_spice and retrieved:
             info['peaking_db']          = float(retrieved.get('peaking_db', info['peaking_db']))
             info['noise_mvrms']         = float(retrieved.get('noise_mvrms', info['noise_mvrms']))
             info['power_mw']            = float(retrieved.get('power_mw', info['power_mw']))
