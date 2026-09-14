@@ -18,7 +18,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 
 from circuit_transistor import simulate_transistor_level
-from environment_transistor import TransistorEqualizerEnv, estimate_area_2stage_mm2
+from environment_transistor import TransistorEqualizerEnv, estimate_area_1stage_mm2
 
 
 def run_pvt_validation(target_peaking_db=6.0, mode='racd', full_matrix=False):
@@ -53,7 +53,7 @@ def run_pvt_validation(target_peaking_db=6.0, mode='racd', full_matrix=False):
             Wn, Rs, Cs, Itail, RL, Rdfe = 4.0, 750.0, 1.8e-12, 400.0, 2200.0, 20000.0
             source_info = "ANALYTICAL_FALLBACK"
 
-    area = estimate_area_2stage_mm2(Wn, Rs, Cs, RL, Rdfe)
+    area = estimate_area_1stage_mm2(Wn, Rs, Cs, RL, Rdfe)
     print(f"Synthesis Origin: {source_info}")
     print(f"Sizing: Wn={Wn:.2f} um, Rs={Rs:.1f} Ohm, Cs={Cs*1e12:.2f} pF, Itail={Itail:.1f} uA, RL={RL:.1f} Ohm, Rdfe={Rdfe:.1f} Ohm")
     print(f"Estimated Die Area: {area:.5f} mm² (Spec: < 0.05 mm²)\n")
@@ -84,7 +84,7 @@ def run_pvt_validation(target_peaking_db=6.0, mode='racd', full_matrix=False):
         res = simulate_transistor_level(
             Wn, Rs, Cs, Itail, RL, Rdfe,
             corner=c, temp=t, vdd=v,
-            topology='2stage'
+            topology='1stage'
         )
         p = res['peaking_db']
         h = res['hd3_db']

@@ -1,4 +1,4 @@
-﻿"""
+"""
 test_faiss.py — Tests for retrieval_faiss_transistor.py
 
 Tests:
@@ -21,9 +21,11 @@ def test_faiss_imports():
 
 def test_faiss_retrieve_returns_list():
     """retrieve_k_nearest_transistor must return a list."""
-    data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'transistor_repository_clean.jsonl')
+    data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'transistor_repository.jsonl')
     if not os.path.exists(data_path):
-        pytest.skip("transistor_repository_clean.jsonl not found")
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'transistor_repository_clean.jsonl')
+    if not os.path.exists(data_path):
+        pytest.skip("transistor repository not found")
     from retrieval_faiss_transistor import retrieve_k_nearest_transistor
     results = retrieve_k_nearest_transistor(target_peaking_db=6.0, k=3)
     assert isinstance(results, list)
@@ -35,9 +37,11 @@ def test_faiss_retrieve_returns_list():
 
 def test_faiss_peaking_error_small():
     """FAISS retrieval should find a design within 2 dB of the query peaking."""
-    data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'transistor_repository_clean.jsonl')
+    data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'transistor_repository.jsonl')
     if not os.path.exists(data_path):
-        pytest.skip("transistor_repository_clean.jsonl not found")
+        data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'transistor_repository_clean.jsonl')
+    if not os.path.exists(data_path):
+        pytest.skip("transistor repository not found")
     from retrieval_faiss_transistor import retrieve_k_nearest_transistor
     target = 5.84  # known achievable from PVT table
     results = retrieve_k_nearest_transistor(target_peaking_db=target, k=1)

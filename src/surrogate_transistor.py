@@ -319,7 +319,7 @@ def _spice_one(args):
             r = simulate_transistor_fast(
                 float(Wn), float(Rs), float(Cs), float(Itail),
                 float(RL), float(Rdfe),
-                corner=corner, temp=temp, vdd=vdd, topology='2stage',
+                corner=corner, temp=temp, vdd=vdd, topology='1stage',
                 worker_id=worker_id,
                 compute_hd3=False,  # fast path — eye transient still runs for eye_width_ui
             )

@@ -74,8 +74,20 @@ def _append_transistor_record(params: dict, result: dict):
 # Area estimation
 # ---------------------------------------------------------------------------
 
+def estimate_area_1stage_mm2(Wn, Rs, Cs, RL, Rdfe):
+    """Estimate total layout area in mm2 for 1-stage CTLE + 1-tap DFE (spec-correct topology).
+
+    Device count vs 2-stage: 2 diff-pair NFETs (vs 4), 1× Rs/Cs/RL set (vs 2×), same Rdfe.
+    """
+    a_diff = 2 * (Wn * 0.15)          # 2 differential input transistors (XM1, XM2)
+    a_res  = (2 * RL + Rs + Rdfe + 50000) / 150.0   # poly resistors (RL1+RL2 + Rs + Rdfe)
+    a_cap  = (Cs + 5e-12) * 1e15 / 2.0              # 1× degeneration cap
+    total_um2 = (a_diff + a_res + a_cap) * 2.5      # 2.5× routing overhead
+    return total_um2 / 1e6
+
+
 def estimate_area_2stage_mm2(Wn, Rs, Cs, RL, Rdfe):
-    """Estimate total layout area in mm2 for 2-stage CTLE."""
+    """Estimate total layout area in mm2 for 2-stage CTLE (kept for reference / ablation)."""
     a_diff = 4 * (Wn * 0.15)  # 4 differential input transistors
     a_res = (4 * RL + 2 * Rs + 2 * Rdfe + 100000) / 150.0  # poly resistors
     a_cap = (2 * Cs + 10e-12) * 1e15 / 2.0  # MOM capacitors
@@ -127,7 +139,7 @@ class TransistorEqualizerEnv(gym.Env):
                  itail_range=(100.0, 1200.0),
                  rl_range=(500.0, 5000.0),
                  rdfe_range=(5000.0, 40000.0),
-                 topology='2stage',
+                 topology='1stage',
                  use_surrogate=None,       # None = auto-detect from file presence
                  multi_corner=True,        # randomize PVT corner each episode
                  spice_validate_every=0):  # run real SPICE every N steps for DAgger; 0=disabled
@@ -246,7 +258,9 @@ class TransistorEqualizerEnv(gym.Env):
         eye_w = result.get('eye_width_ui', 0.0)
         eye_w_penalty = max(0.0, (self.eye_width_limit_ui - eye_w) / self.eye_width_limit_ui) if eye_w > 0 else 0.0
 
-        area = estimate_area_2stage_mm2(Wn, Rs, Cs, RL, Rdfe)
+        area = (estimate_area_1stage_mm2 if self.topology == '1stage' else estimate_area_2stage_mm2)(
+            Wn, Rs, Cs, RL, Rdfe
+        )
         area_penalty = max(0.0, (area - self.area_limit_mm2) / self.area_limit_mm2)
 
         # Peaking accuracy weighted 3× over constraint penalties

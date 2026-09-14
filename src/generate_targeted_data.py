@@ -14,7 +14,7 @@ from surrogate_transistor import (
     simulate_transistor_surrogate, _latin_hypercube_sample
 )
 
-TARGET_CLEAN_PATH = r'C:\Users\Kio\Desktop\Dev\RACD2\data\transistor_repository_clean.jsonl'
+TARGET_REPO_PATH = r'C:\Users\Kio\Desktop\Dev\RACD2\data\transistor_repository.jsonl'
 
 def _spice_worker(args):
     idx, Wn, Rs, Cs, Itail, RL, Rdfe = args
@@ -24,7 +24,7 @@ def _spice_worker(args):
             r = simulate_transistor_fast(
                 Wn, Rs, Cs, Itail, RL, Rdfe,
                 corner=corner, temp=temp, vdd=vdd,
-                topology='2stage', worker_id=idx,
+                topology='1stage', worker_id=idx,
             )
             record = {
                 'Wn_um': float(Wn), 'Rs_ohm': float(Rs),
@@ -35,6 +35,7 @@ def _spice_worker(args):
                 'power_mw':            float(r['power_mw']),
                 'eye_height_proxy_mv': float(r['eye_height_proxy_mv']),
                 'hd3_db':              float(r.get('hd3_db', -38.0)),
+                'eye_width_ui':        float(r.get('eye_width_ui', 0.0)),
                 'corner': corner, 'temp': temp, 'vdd': vdd,
             }
             results.append(record)
@@ -46,7 +47,7 @@ def _spice_worker(args):
 def main():
     multiprocessing.freeze_support()
     print("=" * 70)
-    print("Targeted SPICE Data Generation for 4.5 - 9.5 dB Peaking")
+    print("Targeted SPICE Data Generation for full 3 - 12 dB peaking range")
     print("=" * 70)
 
     load_transistor_surrogate()
@@ -59,15 +60,15 @@ def main():
     for row in candidates:
         Wn, Rs, Cs, Itail, RL, Rdfe = row.tolist()
         pred = simulate_transistor_surrogate(Wn, Rs, Cs, Itail, RL, Rdfe)
-        # Filter for candidates predicted to produce 4.5 to 9.5 dB peaking
-        if 4.5 <= pred['peaking_db'] <= 9.5 and pred['noise_mvrms'] <= 2.0:
+        # Filter for full spec range 3–12 dB, noise within 3x spec limit
+        if 3.0 <= pred['peaking_db'] <= 12.0 and pred['noise_mvrms'] <= 3.0:
             filtered.append(row)
 
-    print(f"  Found {len(filtered)} candidates predicted in [4.5, 9.5] dB.")
-    # Select up to 350 candidates (350 * 3 corners = ~1,050 SPICE simulations)
+    print(f"  Found {len(filtered)} candidates predicted in [3, 12] dB.")
+    # Select up to 350 candidates (350 * 5 corners = ~1,750 SPICE simulations)
     n_selected = min(350, len(filtered))
     selected = filtered[:n_selected]
-    print(f"  Selected {n_selected} designs for ngspice simulation across 3 corners ({n_selected * 3} calls).")
+    print(f"  Selected {n_selected} designs for ngspice ({n_selected * 5} SPICE calls across 5 PVT corners).")
 
     # Step 2: Run parallel ngspice
     n_workers = min(os.cpu_count() or 4, 12)
@@ -94,12 +95,12 @@ def main():
     in_range = np.sum((p_np >= 4.5) & (p_np <= 9.5))
     print(f"  Actually in [4.5, 9.5] dB: {in_range}/{len(p_np)} ({in_range/len(p_np)*100:.1f}%)")
 
-    # Append to transistor_repository_clean.jsonl
-    with open(TARGET_CLEAN_PATH, 'a', encoding='utf-8') as f:
+    # Append to transistor_repository.jsonl (active 1-stage repository)
+    with open(TARGET_REPO_PATH, 'a', encoding='utf-8') as f:
         for r in new_records:
             f.write(json.dumps(r) + '\n')
 
-    print(f"[OK] Appended {len(new_records)} records to {TARGET_CLEAN_PATH}")
+    print(f"[OK] Appended {len(new_records)} records to {TARGET_REPO_PATH}")
 
 
 if __name__ == '__main__':

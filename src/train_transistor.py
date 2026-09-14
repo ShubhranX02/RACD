@@ -188,7 +188,7 @@ def train_transistor(
         def _init():
             from environment_transistor import TransistorEqualizerEnv
             env = TransistorEqualizerEnv(
-                topology='2stage',
+                topology='1stage',
                 use_surrogate=use_surrogate,
                 multi_corner=multi_corner,
                 spice_validate_every=spice_validate_every if rank == 0 else 0,
@@ -209,7 +209,7 @@ def train_transistor(
         print("  Backend: Full SPICE ngspice (sequential)")
         from environment_transistor import TransistorEqualizerEnv
         env = TransistorEqualizerEnv(
-            topology='2stage',
+            topology='1stage',
             use_surrogate=False,
             multi_corner=multi_corner,
         )
@@ -261,7 +261,7 @@ def train_transistor(
     for target in [4.5, 6.0, 8.0]:
         val_env = TransistorEqualizerEnv(
             peaking_target_range=(target, target),
-            topology='2stage',
+            topology='1stage',
             use_surrogate=False,   # always validate with real SPICE
             multi_corner=False,
         )
@@ -317,7 +317,7 @@ if __name__ == '__main__':
         load_transistor_surrogate()
 
         print("=" * 75)
-        print(f"  Training Transistor-Level RL Agent (2-Stage CTLE, Sky130 PDK)")
+        print(f"  Training Transistor-Level RL Agent (1-Stage CTLE, Sky130 PDK)")
         print(f"  Steps: {args.steps:,} | Backend: BatchedSurrogateVecEnv x{args.batched_envs} | ZERO IPC")
         print("=" * 75)
 

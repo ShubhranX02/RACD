@@ -123,7 +123,7 @@ Rdfe2 vdelayed_n voutn {Rdfe_ohm}
 
 
 def simulate_transistor_fast(Wn_um, Rs_ohm, Cs_farad, Itail_half_ua, RL_ohm=2000, Rdfe_ohm=10000,
-                             corner='tt', temp=27, vdd=1.8, topology='2stage', worker_id=None,
+                             corner='tt', temp=27, vdd=1.8, topology='1stage', worker_id=None,
                              compute_hd3=False):
     """
     Fast simulation for RL training loop: AC + OP + Noise + (optional) HD3 + eye transient.
@@ -155,16 +155,20 @@ def simulate_transistor_fast(Wn_um, Rs_ohm, Cs_farad, Itail_half_ua, RL_ohm=2000
     label = f'fast_train{suffix}'
 
     # -------------------------------------------------------------------------
-    # Run 1: AC + OP + Noise (always)
+    # Single-Pass SPICE Execution: AC + OP + Noise + Eye Transient
+    # Combines both runs into one ngspice process to avoid reloading the huge
+    # Sky130 PDK library twice (cuts simulation time in half).
     # -------------------------------------------------------------------------
-    netlist = f"""Combined AC/OP/Noise
+    UI_s = 200e-12
+    netlist = f"""Combined Single-Pass SPICE Simulation
 .lib "{PDK_LIB_PATH}" {corner}
-.option temp={temp} scale=1u
+.option temp={temp} scale=1u nomod nopage method=gear
 
 Vdd vdd 0 {vdd}
-Vinp vin_p 0 DC {vdd/2} AC 0.5
-Vinn vin_n 0 DC {vdd/2} AC -0.5
+Vinp vin_p 0 DC {vdd/2} AC 0.5 PULSE({vdd/2} {vdd/2 + 0.1} 0 10p 10p 200p 5n)
+Vinn vin_n 0 DC {vdd/2} AC -0.5 PULSE({vdd/2} {vdd/2 - 0.1} 0 10p 10p 200p 5n)
 {devices}
+
 .control
 ac dec 10 10meg 10g
 wrdata {ac_data_path} vdb(voutp,voutn)
@@ -172,6 +176,8 @@ op
 print i(Vdd)
 noise v(voutp,voutn) vinp dec 10 10meg 5g
 print inoise_total
+tran 10p 1n
+wrdata {eye_data_path} v(voutp,voutn)
 .endc
 .end
 """
@@ -192,27 +198,6 @@ print inoise_total
     match_n = re.search(r'inoise_total\s*=\s*([\d.eE+-]+)', res.stdout, re.IGNORECASE)
     noise_mvrms = float(match_n.group(1)) * 1000 if match_n else 10.0
 
-    # -------------------------------------------------------------------------
-    # Run 2: 2 ns pulse transient — real eye height + eye width
-    # Replaces the old AC-gain proxy (10^(gain/20)*100 mV) which is non-physical.
-    # UI = 200 ps at 5 Gbps (PCIe Gen 2).
-    # -------------------------------------------------------------------------
-    UI_s = 200e-12
-    netlist_eye = f"""Eye Pulse Transient
-.lib "{PDK_LIB_PATH}" {corner}
-.option temp={temp} scale=1u
-
-Vdd vdd 0 {vdd}
-Vinp vin_p 0 DC {vdd/2} PULSE({vdd/2} {vdd/2 + 0.1} 0 10p 10p 200p 10n)
-Vinn vin_n 0 DC {vdd/2} PULSE({vdd/2} {vdd/2 - 0.1} 0 10p 10p 200p 10n)
-{devices}
-.control
-tran 2p 2n
-wrdata {eye_data_path} v(voutp,voutn)
-.endc
-.end
-"""
-    _run_ngspice(netlist_eye, f'eye{suffix}')
     t_arr, v_arr = _read_wrdata(eye_data_path)
 
     if len(v_arr) > 4:
@@ -292,7 +277,7 @@ fourier 100Meg v(voutp,voutn)
 
 
 def simulate_transistor_level(Wn_um, Rs_ohm, Cs_farad, Itail_half_ua, RL_ohm=2000, Rdfe_ohm=10000,
-                             corner='tt', temp=27, vdd=1.8, topology='2stage'):
+                             corner='tt', temp=27, vdd=1.8, topology='1stage'):
     """
     Full comprehensive multi-mode simulation:
     - Run 1: AC + OP + Noise

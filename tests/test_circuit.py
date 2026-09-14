@@ -1,4 +1,4 @@
-﻿"""
+"""
 test_circuit.py — Tests for circuit_transistor.py
 
 These tests cover:
@@ -64,3 +64,13 @@ def test_estimate_area_2stage_reasonable():
     )
     assert area > 0, "Area must be positive"
     assert area < 0.05, f"Nominal sizing should be < 0.05 mm^2 (spec limit), got {area:.4f} mm^2"
+
+
+def test_estimate_area_1stage_reasonable():
+    """estimate_area_1stage_mm2 must return a positive area < 0.05 mm^2 and smaller than 2-stage."""
+    from environment_transistor import estimate_area_1stage_mm2, estimate_area_2stage_mm2
+    a1 = estimate_area_1stage_mm2(Wn=4.0, Rs=750.0, Cs=1.8e-12, RL=2200.0, Rdfe=20000.0)
+    a2 = estimate_area_2stage_mm2(Wn=4.0, Rs=750.0, Cs=1.8e-12, RL=2200.0, Rdfe=20000.0)
+    assert a1 > 0, "1-stage area must be positive"
+    assert a1 < 0.05, f"1-stage sizing should be < 0.05 mm^2 (spec limit), got {a1:.4f} mm^2"
+    assert a1 < a2, f"1-stage area ({a1:.5f}) should be smaller than 2-stage ({a2:.5f})"

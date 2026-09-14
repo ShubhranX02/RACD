@@ -14,8 +14,8 @@ from typing import Dict, Optional
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from circuit_transistor import _device_section_2stage, PDK_LIB_PATH
-from environment_transistor import estimate_area_2stage_mm2
+from circuit_transistor import _device_section_1stage, PDK_LIB_PATH
+from environment_transistor import estimate_area_1stage_mm2
 
 # Safe Anthropic initialization with offline regex fallback
 client = None
@@ -27,7 +27,7 @@ except Exception:
     client = None
 
 SYSTEM_CONTEXT = """You are a specification parser for an analog equalizer design tool.
-The tool designs a cascaded 2-stage CTLE + 1-Tap DFE in SkyWater 130 nm PDK for high-speed SerDes (PCIe Gen2 / 5 Gbps).
+The tool designs a single-stage CTLE + 1-Tap DFE in SkyWater 130 nm PDK for high-speed SerDes (PCIe Gen2 / 5 Gbps).
 Extract the following engineering targets from the user request:
 - target_peaking_db: High-frequency peaking boost, must be between 3.0 and 12.0 dB (default 8.0 dB).
 - noise_limit_mvrms: Maximum acceptable input-referred noise (default 1.5 mVrms).
@@ -89,7 +89,7 @@ def generate_spice_netlist(
     temp: int = 27,
     vdd: float = 1.8,
 ) -> str:
-    """Generate a production-ready, stand-alone ngspice netlist for the synthesized 2-stage CTLE."""
+    """Generate a production-ready, stand-alone ngspice netlist for the synthesized 1-stage CTLE."""
     Wn = sizing["Wn_um"]
     Rs = sizing["Rs_ohm"]
     Cs = sizing["Cs_farad"]
@@ -97,13 +97,9 @@ def generate_spice_netlist(
     RL = sizing["RL_ohm"]
     Rdfe = sizing["Rdfe_ohm"]
 
-    devices = _device_section_2stage(
-        Wn1_um=Wn, Rs1_ohm=Rs, Cs1_farad=Cs, Itail1_half_ua=Itail, RL1_ohm=RL,
-        Wn2_um=Wn, Rs2_ohm=Rs, Cs2_farad=Cs, Itail2_half_ua=Itail, RL2_ohm=RL,
-        Rdfe_ohm=Rdfe, vdd=vdd
-    )
+    devices = _device_section_1stage(Wn, Rs, Cs, Itail, RL, Rdfe)
 
-    netlist = f"""* RACD Synthesized SkyWater 130 nm Cascaded 2-Stage CTLE + 1-Tap DFE
+    netlist = f"""* RACD Synthesized SkyWater 130 nm 1-Stage CTLE + 1-Tap DFE
 * Technology: SkyWater 130 nm PDK (sky130A)
 * Synthesis Sizing: Wn={Wn:.3f}um, Rs={Rs:.1f} Ohm, Cs={Cs*1e12:.3f}pF, Itail={Itail:.1f}uA, RL={RL:.1f} Ohm, Rdfe={Rdfe:.1f} Ohm
 
@@ -161,7 +157,7 @@ def synthesize_from_prompt(
         corner="tt",
     )
     sizing = res["sizing"]
-    area = estimate_area_2stage_mm2(
+    area = estimate_area_1stage_mm2(
         sizing["Wn_um"], sizing["Rs_ohm"], sizing["Cs_farad"], sizing["RL_ohm"], sizing["Rdfe_ohm"]
     )
 
@@ -196,7 +192,7 @@ def synthesize_from_prompt(
         spice_res = simulate_transistor_fast(
             sizing["Wn_um"], sizing["Rs_ohm"], sizing["Cs_farad"],
             sizing["Itail_half_ua"], sizing["RL_ohm"], sizing["Rdfe_ohm"],
-            corner="tt", temp=27, vdd=1.8, topology="2stage"
+            corner="tt", temp=27, vdd=1.8, topology="1stage"
         )
         spice_metrics = spice_res
         err = abs(spice_res["peaking_db"] - specs["target_peaking_db"])

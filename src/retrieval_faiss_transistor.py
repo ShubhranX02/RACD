@@ -1,8 +1,8 @@
 """
 retrieval_faiss_transistor.py — Fast FAISS-Based Nearest-Neighbour Retrieval for
-Sky130 Transistor-Level 2-Stage CTLE + 1-Tap DFE Equalizers.
+Sky130 Transistor-Level 1-Stage CTLE + 1-Tap DFE Equalizers.
 
-Indexes 2,850+ SPICE-verified circuit records from transistor_repository_clean.jsonl.
+Indexes SPICE-verified circuit records from transistor_repository.jsonl.
 Features:
   1. Instant (<0.1ms) retrieval of SPICE-verified sizing for target peaking, noise, power, eye.
   2. Persistent index caching to disk (models/transistor_faiss.index).
@@ -26,10 +26,13 @@ except ImportError:
     _FAISS_AVAILABLE = False
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_PATH = PROJECT_ROOT / "data" / "transistor_repository_clean.jsonl"
+# Use the active 1-stage repository; fall back to clean archive only if primary missing
+_PRIMARY_DATA   = PROJECT_ROOT / "data" / "transistor_repository.jsonl"
+_FALLBACK_DATA  = PROJECT_ROOT / "data" / "transistor_repository_clean_2stage_archive.jsonl"
+DATA_PATH = _PRIMARY_DATA if _PRIMARY_DATA.exists() else _FALLBACK_DATA
 INDEX_DIR = PROJECT_ROOT / "models"
 INDEX_PATH = INDEX_DIR / "transistor_faiss.index"
-META_PATH = INDEX_DIR / "transistor_faiss_meta.json"
+META_PATH  = INDEX_DIR / "transistor_faiss_meta.json"
 
 # Normalization bounds for search space
 _SPEC_SCALES = {

@@ -81,7 +81,7 @@ class BatchedSurrogateVecEnv(VecEnv):
         self,
         n_envs: int = 64,
         peaking_target_range: Tuple[float, float] = (3.0, 12.0),
-        topology: str = '2stage',
+        topology: str = '1stage',
         multi_corner: bool = True,
         noise_limit_mvrms: float = _NOISE_LIMIT_MV,
         power_limit_mw: float = _POWER_LIMIT_MW,
