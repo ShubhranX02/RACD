@@ -30,7 +30,7 @@ if os.path.exists(ONNX_PATH):
 else:
     INFERENCE_BACKEND = "PyTorch (ONNX model not found)"
 
-from environment_transistor import TransistorEqualizerEnv
+from environment_transistor import TransistorEqualizerEnv, estimate_area_2stage_mm2
 
 st.set_page_config(page_title="RACD - Transistor Design", page_icon="⚡", layout="wide")
 
@@ -42,7 +42,7 @@ st.write("Automated CTLE + DFE sizing using ONNX-accelerated Reinforcement Learn
 mode = st.radio("Input method", ["Slider", "Natural language"])
 
 if mode == "Slider":
-    target = st.slider("Target peaking (dB)", 3.0, 11.0, 8.0, step=0.1)
+    target = st.slider("Target peaking (dB)", 3.0, 12.0, 8.0, step=0.1)
     noise_limit = 1.5
 else:
     user_text = st.text_input("Describe what you need:", "moderate boost around 7dB, low noise")
@@ -133,7 +133,6 @@ if st.button("🚀 Design Circuit", type="primary"):
     m5.metric("Eye Proxy (> 100)", f"{info['eye_height_proxy_mv']:.1f} mV", delta=f"{info['eye_height_proxy_mv'] - 100:.1f}", delta_color=eye_color)
 
     # Area
-    area_um2 = (info['Wn'] * 0.15 * 2) + ((info['Cs'] * 1e12) * 1000) + ((info['Rs'] + info['RL'] + info['Rdfe']) / 200.0)
-    area_mm2 = area_um2 / 1_000_000.0
+    area_mm2 = estimate_area_2stage_mm2(info['Wn'], info['Rs'], info['Cs'], info['RL'], info['Rdfe'])
     area_color = "normal" if area_mm2 < 0.05 else "inverse"
     m6.metric("Area (< 0.05)", f"{area_mm2:.4f} mm²", delta=f"{area_mm2 - 0.05:.4f}", delta_color=area_color)

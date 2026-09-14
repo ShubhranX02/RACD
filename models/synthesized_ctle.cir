@@ -1,6 +1,6 @@
 * RACD Synthesized SkyWater 130 nm Cascaded 2-Stage CTLE + 1-Tap DFE
 * Technology: SkyWater 130 nm PDK (sky130A)
-* Synthesis Sizing: Wn=9.373um, Rs=1079.5 Ohm, Cs=1.173pF, Itail=913.5uA, RL=1862.2 Ohm, Rdfe=5735.6 Ohm
+* Synthesis Sizing: Wn=17.205um, Rs=673.9 Ohm, Cs=2.371pF, Itail=1459.9uA, RL=500.0 Ohm, Rdfe=1000.0 Ohm
 
 .lib "C:/Users/Kio/.ciel/ciel/sky130/versions/bdc9412b3e468c102d01b7cf6337be06ec6e9c9a/sky130A/libs.tech/ngspice/sky130.lib.spice" tt
 .option temp=27 scale=1u
@@ -11,14 +11,14 @@ Vinn vin_n 0 DC 0.9 AC -0.5
 
 
 * === Stage 1 CTLE ===
-XM1 vm1_n vin_p s1 0 sky130_fd_pr__nfet_01v8 w=9.373090745967232 l=0.15
-XM2 vm1_p vin_n s2 0 sky130_fd_pr__nfet_01v8 w=9.373090745967232 l=0.15
-Rs1 s1 s2 1079.4596304926058
-Cs1 s1 s2 1.172827329581381e-12
-Itail1_1 s1 0 DC 913.4563435212472u
-Itail1_2 s2 0 DC 913.4563435212472u
-RL1_1 vdd vm1_n 1862.2339817234529
-RL1_2 vdd vm1_p 1862.2339817234529
+XM1 vm1_n vin_p s1 0 sky130_fd_pr__nfet_01v8 w=17.205368041992188 l=0.15
+XM2 vm1_p vin_n s2 0 sky130_fd_pr__nfet_01v8 w=17.205368041992188 l=0.15
+Rs1 s1 s2 673.9103393554688
+Cs1 s1 s2 2.3712518493895773e-12
+Itail1_1 s1 0 DC 1459.92919921875u
+Itail1_2 s2 0 DC 1459.92919921875u
+RL1_1 vdd vm1_n 500.0
+RL1_2 vdd vm1_p 500.0
 
 * === AC Coupling & Biasing ===
 Cac1 vm1_n vg2_n 5p
@@ -28,22 +28,22 @@ Rbias2 vdd_half vg2_p 50k
 Vmid vdd_half 0 0.9
 
 * === Stage 2 Booster ===
-XM3 voutn vg2_p s3 0 sky130_fd_pr__nfet_01v8 w=9.373090745967232 l=0.15
-XM4 voutp vg2_n s4 0 sky130_fd_pr__nfet_01v8 w=9.373090745967232 l=0.15
-Rs2 s3 s4 1079.4596304926058
-Cs2 s3 s4 1.172827329581381e-12
-Itail2_1 s3 0 DC 913.4563435212472u
-Itail2_2 s4 0 DC 913.4563435212472u
-RL2_1 vdd voutn 1862.2339817234529
-RL2_2 vdd voutp 1862.2339817234529
+XM3 voutn vg2_p s3 0 sky130_fd_pr__nfet_01v8 w=17.205368041992188 l=0.15
+XM4 voutp vg2_n s4 0 sky130_fd_pr__nfet_01v8 w=17.205368041992188 l=0.15
+Rs2 s3 s4 673.9103393554688
+Cs2 s3 s4 2.3712518493895773e-12
+Itail2_1 s3 0 DC 1459.92919921875u
+Itail2_2 s4 0 DC 1459.92919921875u
+RL2_1 vdd voutn 500.0
+RL2_2 vdd voutp 500.0
 
 * === 1-Tap DFE ===
 Bslice_p vslice_p 0 V = V(voutp,voutn) > 0 ? 0.1 : -0.1
 Bslice_n vslice_n 0 V = V(voutp,voutn) < 0 ? 0.1 : -0.1
 Tdelay_p vslice_p 0 vdelayed_p 0 Z0=50 TD=200p
 Tdelay_n vslice_n 0 vdelayed_n 0 Z0=50 TD=200p
-Rdfe1 vdelayed_p voutp 5735.553518413555
-Rdfe2 vdelayed_n voutn 5735.553518413555
+Rdfe1 vdelayed_p voutp 1000.0
+Rdfe2 vdelayed_n voutn 1000.0
 
 
 .control

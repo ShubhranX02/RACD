@@ -48,21 +48,23 @@ MODEL_PATH   = MODEL_DIR / "surrogate_transistor.pt"
 # Physical parameter bounds (must match environment_transistor.py ranges)
 # ---------------------------------------------------------------------------
 PARAM_BOUNDS = {
-    "Wn_um":          (2.0,     10.0),
-    "Rs_ohm":         (300.0,   1500.0),
-    "Cs_farad":       (0.5e-12, 3.5e-12),
-    "Itail_half_ua":  (200.0,   1000.0),
-    "RL_ohm":         (1000.0,  4000.0),
+    "Wn_um":          (1.0,     15.0),    # wider: low Wn → low gain → ~3 dB; high Wn → ~12 dB
+    "Rs_ohm":         (100.0,   3000.0),  # wider: high Rs → high degeneration → lower gain; low Rs → high gain
+    "Cs_farad":       (0.5e-12, 5.0e-12), # slightly wider for more zero-placement freedom
+    "Itail_half_ua":  (100.0,   1200.0),  # wider to support high-gain stages needing more bias current
+    "RL_ohm":         (500.0,   5000.0),  # wider: higher RL for high gain at 12 dB
     "Rdfe_ohm":       (5000.0,  40000.0),
 }
 INPUT_KEYS  = list(PARAM_BOUNDS.keys())
-OUTPUT_KEYS = ["peaking_db", "noise_mvrms", "power_mw", "eye_height_proxy_mv", "hd3_db"]
+OUTPUT_KEYS = ["peaking_db", "noise_mvrms", "power_mw", "eye_height_proxy_mv", "hd3_db", "eye_width_ui"]
 
-# PVT corners used during data generation
+# PVT corners used during data generation — all 5 to match environment_transistor.py
 _PVT_CORNERS = [
-    ('tt', 27,  1.8),
-    ('ss', 125, 1.71),
-    ('ff', 0,   1.89),
+    ('tt', 27,  1.8),    # typical-typical
+    ('ss', 125, 1.71),   # slow-slow, hot, low-voltage
+    ('ff', 0,   1.89),   # fast-fast, cold, high-voltage
+    ('sf', 27,  1.8),    # slow-nfet, fast-pfet
+    ('fs', 27,  1.8),    # fast-nfet, slow-pfet
 ]
 
 # ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ _PVT_CORNERS = [
 class TransistorSurrogateMLP(nn.Module):
     """4-layer MLP with BatchNorm and Dropout for surrogate CTLE simulation."""
 
-    def __init__(self, input_dim: int = 6, hidden_dim: int = 256, output_dim: int = 5,
+    def __init__(self, input_dim: int = 6, hidden_dim: int = 256, output_dim: int = 6,
                  dropout: float = 0.1):
         super().__init__()
         self.net = nn.Sequential(
@@ -249,6 +251,7 @@ def simulate_transistor_surrogate(
         'power_mw':             float(max(0.0, y[2])),
         'eye_height_proxy_mv':  float(max(0.0, y[3])),
         'hd3_db':               float(y[4]),
+        'eye_width_ui':         float(max(0.0, y[5])) if len(y) > 5 else 0.0,
         'low_freq_gain_db':     float(y[0]) - 6.0,
         'high_freq_gain_db':    float(y[0]),
         '_source':              'surrogate_transistor',
@@ -299,7 +302,13 @@ def _latin_hypercube_sample(n: int, bounds: dict, seed: int = 42) -> np.ndarray:
 
 
 def _spice_one(args):
-    """Worker function — simulates one parameter set, returns a data record or None."""
+    """Worker function — simulates one parameter set, returns data records or empty list on failure.
+
+    Uses compute_hd3=False (fast ~50ms/call) for reliable bulk data generation.
+    Eye transient still runs so eye_width_ui is recorded accurately.
+    HD3 defaults to -38.0 placeholder; use a separate enrichment pass with
+    compute_hd3=True on a subset of records once the surrogate is trained.
+    """
     idx, Wn, Rs, Cs, Itail, RL, Rdfe = args
     # Use PID-unique worker_id to avoid temp file conflicts across processes
     worker_id = os.getpid()
@@ -312,20 +321,25 @@ def _spice_one(args):
                 float(RL), float(Rdfe),
                 corner=corner, temp=temp, vdd=vdd, topology='2stage',
                 worker_id=worker_id,
+                compute_hd3=False,  # fast path — eye transient still runs for eye_width_ui
             )
             record = {
-                'Wn_um': float(Wn), 'Rs_ohm': float(Rs),
-                'Cs_farad': float(Cs), 'Itail_half_ua': float(Itail),
-                'RL_ohm': float(RL), 'Rdfe_ohm': float(Rdfe),
+                'Wn_um':               float(Wn),
+                'Rs_ohm':              float(Rs),
+                'Cs_farad':            float(Cs),
+                'Itail_half_ua':       float(Itail),
+                'RL_ohm':              float(RL),
+                'Rdfe_ohm':            float(Rdfe),
                 'peaking_db':          r['peaking_db'],
                 'noise_mvrms':         r['noise_mvrms'],
                 'power_mw':            r['power_mw'],
                 'eye_height_proxy_mv': r['eye_height_proxy_mv'],
-                'hd3_db':              r.get('hd3_db', -38.0),
+                'hd3_db':              r.get('hd3_db', -38.0),  # -38.0 placeholder in fast path
+                'eye_width_ui':        r.get('eye_width_ui', 0.0),
                 'corner': corner, 'temp': temp, 'vdd': vdd,
             }
             results.append(record)
-        except Exception as e:
+        except Exception:
             pass  # skip failed SPICE runs silently
     return results
 
@@ -353,7 +367,8 @@ def generate_training_data(
 
     print(f"[data_gen] Generating {n_samples} LHS samples × {len(_PVT_CORNERS)} corners "
           f"= {n_samples * len(_PVT_CORNERS)} SPICE calls across {n_workers} workers")
-    print(f"[data_gen] Estimated time: {n_samples * len(_PVT_CORNERS) * 3 / n_workers / 60:.1f} min")
+    print(f"[data_gen] Estimated time: {n_samples * len(_PVT_CORNERS) * 0.1 / n_workers / 60:.1f} min "
+          f"(~100ms/call: AC+Noise + eye transient, no HD3)")
 
     samples = _latin_hypercube_sample(n_samples, PARAM_BOUNDS, seed=seed)
     args_list = [
@@ -431,6 +446,14 @@ def train_surrogate(
                 return float(r[alias])
         raise KeyError(key)
 
+    # Fallback defaults for outputs missing in old-format records.
+    # Old records (pre eye_width_ui) lack these fields; filling with safe defaults
+    # allows the full existing dataset to be used for training immediately.
+    _OUTPUT_DEFAULTS = {
+        'eye_width_ui': 0.0,   # unknown → 0.0 (model learns ~0 for old param ranges)
+        'hd3_db':      -38.0,  # fast-path placeholder — overwritten by new records
+    }
+
     # Load data
     records = []
     skipped_no_key = 0
@@ -446,8 +469,16 @@ def train_surrogate(
                 continue
             try:
                 r = json.loads(line)
-                row_in  = [_get(r, k) for k in INPUT_KEYS]
-                row_out = [float(r[k]) for k in OUTPUT_KEYS]
+                row_in = [_get(r, k) for k in INPUT_KEYS]
+                # Allow missing output keys — fall back to _OUTPUT_DEFAULTS
+                row_out = []
+                for k in OUTPUT_KEYS:
+                    if k in r:
+                        row_out.append(float(r[k]))
+                    elif k in _OUTPUT_DEFAULTS:
+                        row_out.append(_OUTPUT_DEFAULTS[k])
+                    else:
+                        raise KeyError(k)
                 if any(np.isnan(v) or np.isinf(v) for v in row_in + row_out):
                     continue
                 # Filter obviously-failed SPICE results (negative eye height or extreme noise)
@@ -483,19 +514,30 @@ def train_surrogate(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[train] Device: {device}")
 
+    # Fix: track validation indices explicitly so MAE report uses the correct rows.
+    # random_split() shuffles internally — indexing X[n_train:] is WRONG because it
+    # returns original-order rows, not the shuffled validation set.
+    N = len(X)
+    n_val   = max(1, int(N * val_split))
+    n_train = N - n_val
+    rng = np.random.default_rng(42)
+    perm = rng.permutation(N)
+    train_idx = perm[:n_train]
+    val_idx   = perm[n_train:]
+
     X_t = torch.from_numpy(X_norm)
     Y_t = torch.from_numpy(Y_norm)
-    dataset = TensorDataset(X_t, Y_t)
-    n_val   = max(1, int(len(dataset) * val_split))
-    n_train = len(dataset) - n_val
-    train_ds, val_ds = random_split(dataset, [n_train, n_val],
-                                    generator=torch.Generator().manual_seed(42))
+    from torch.utils.data import Subset
+    dataset   = TensorDataset(X_t, Y_t)
+    train_ds  = Subset(dataset, train_idx.tolist())
+    val_ds    = Subset(dataset, val_idx.tolist())
 
     train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                           num_workers=0, pin_memory=(device.type == 'cuda'))
     val_dl   = DataLoader(val_ds,   batch_size=batch_size * 4, shuffle=False)
 
-    model = TransistorSurrogateMLP(input_dim=6, hidden_dim=hidden_dim, output_dim=5).to(device)
+    n_outputs = len(OUTPUT_KEYS)
+    model = TransistorSurrogateMLP(input_dim=6, hidden_dim=hidden_dim, output_dim=n_outputs).to(device)
     opt   = torch.optim.Adam(model.parameters(), lr=lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=lr * 0.01)
     loss_fn = nn.MSELoss()
@@ -503,7 +545,7 @@ def train_surrogate(
     best_val = float('inf')
     best_state = None
 
-    print(f"[train] Training {epochs} epochs, {n_train} train / {n_val} val samples")
+    print(f"[train] Training {epochs} epochs, {n_train} train / {n_val} val samples, {n_outputs} outputs")
     t0 = time.time()
     for epoch in range(1, epochs + 1):
         model.train()
@@ -539,9 +581,9 @@ def train_surrogate(
     model.load_state_dict(best_state)
     model.eval()
 
-    # Accuracy report on val set (physical units)
-    X_val = X[len(train_ds):]
-    Y_val = Y[len(train_ds):]
+    # Accuracy report on val set (physical units) — uses correctly tracked val_idx
+    X_val = X[val_idx]
+    Y_val = Y[val_idx]
     X_val_t = torch.from_numpy((X_val - x_mean) / x_std).to(device)
     with torch.no_grad():
         Y_pred_norm = model(X_val_t).cpu().numpy()
@@ -549,7 +591,7 @@ def train_surrogate(
     mae = np.abs(Y_pred - Y_val).mean(axis=0)
     print("\n[train] Validation MAE (physical units):")
     for name, err in zip(OUTPUT_KEYS, mae):
-        unit = 'dB' if 'db' in name else ('mV' if 'mv' in name.lower() else 'mW')
+        unit = 'dB' if 'db' in name else ('UI' if 'ui' in name else ('mV' if 'mv' in name.lower() else 'mW'))
         print(f"  {name:<25} {err:.4f} {unit}")
 
     # Save
@@ -558,7 +600,7 @@ def train_surrogate(
         'state_dict':   best_state,
         'input_dim':    6,
         'hidden_dim':   hidden_dim,
-        'output_dim':   5,
+        'output_dim':   n_outputs,
         'input_mean':   torch.from_numpy(x_mean),
         'input_std':    torch.from_numpy(x_std),
         'output_mean':  torch.from_numpy(y_mean),

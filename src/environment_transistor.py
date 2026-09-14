@@ -91,7 +91,16 @@ class TransistorEqualizerEnv(gym.Env):
     """
     Continuous control environment for transistor sizing.
 
-    State:  [target_peaking_db] in [3.0, 11.0] dB
+    State (9-D):
+        [target_peaking_norm,   # target peaking / 12.0
+         noise_limit_norm,      # noise_limit / 1.5
+         power_limit_norm,      # power_limit / 15.0
+         eye_limit_norm,        # eye_limit / 200.0
+         corner_tt, corner_ss, corner_ff, corner_sf, corner_fs,  # one-hot (5)
+        ]
+        Total: 4 + 5 = 9 dimensions.
+        The 9-D observation lets the agent learn PVT-adaptive sizing policies.
+
     Action: 6 continuous dims normalized to [-1, 1]:
             [Wn_um, Rs_ohm, Cs_farad, Itail_half_ua, RL_ohm, Rdfe_ohm]
 
@@ -100,39 +109,52 @@ class TransistorEqualizerEnv(gym.Env):
         2. Full ngspice   — ~2-4 s/call   (always available, used for DAgger refinement)
     """
 
+    # Index of each corner in the one-hot encoding
+    _CORNER_IDX = {'tt': 0, 'ss': 1, 'ff': 2, 'sf': 3, 'fs': 4}
+    OBS_DIM = 9
+
     def __init__(self,
-                 peaking_target_range=(3.0, 10.0),
+                 peaking_target_range=(3.0, 12.0),
                  noise_limit_mvrms=1.5,
                  hd3_limit_db=-30.0,
                  power_limit_mw=15.0,
                  eye_height_limit_mv=100.0,
+                 eye_width_limit_ui=0.4,
                  area_limit_mm2=0.05,
-                 w_range=(2.0, 10.0),
-                 rs_range=(300.0, 1500.0),
-                 cs_range=(0.5e-12, 3.5e-12),
-                 itail_range=(200.0, 1000.0),
-                 rl_range=(1000.0, 4000.0),
+                 w_range=(1.0, 15.0),
+                 rs_range=(100.0, 3000.0),
+                 cs_range=(0.5e-12, 5.0e-12),
+                 itail_range=(100.0, 1200.0),
+                 rl_range=(500.0, 5000.0),
                  rdfe_range=(5000.0, 40000.0),
                  topology='2stage',
                  use_surrogate=None,       # None = auto-detect from file presence
                  multi_corner=True,        # randomize PVT corner each episode
                  spice_validate_every=0):  # run real SPICE every N steps for DAgger; 0=disabled
         super().__init__()
-        self.peaking_target_range = peaking_target_range
-        self.noise_limit_mvrms = noise_limit_mvrms
-        self.hd3_limit_db = hd3_limit_db
-        self.power_limit_mw = power_limit_mw
-        self.eye_height_limit_mv = eye_height_limit_mv
-        self.area_limit_mm2 = area_limit_mm2
-        self.topology = topology
-        self.multi_corner = multi_corner
-        self.spice_validate_every = spice_validate_every
-        self._step_count = 0
-        self.current_corner = _PVT_CORNERS[0]  # (corner_str, temp, vdd)
+        self.peaking_target_range   = peaking_target_range
+        self.noise_limit_mvrms      = noise_limit_mvrms
+        self.hd3_limit_db           = hd3_limit_db
+        self.power_limit_mw         = power_limit_mw
+        self.eye_height_limit_mv    = eye_height_limit_mv
+        self.eye_width_limit_ui     = eye_width_limit_ui
+        self.area_limit_mm2         = area_limit_mm2
+        self.topology               = topology
+        self.multi_corner           = multi_corner
+        self.spice_validate_every   = spice_validate_every
+        self._step_count            = 0
+        self.current_corner         = _PVT_CORNERS[0]  # (corner_str, temp, vdd)
 
         self.ranges = [w_range, rs_range, cs_range, itail_range, rl_range, rdfe_range]
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(len(self.ranges),), dtype=np.float32)
-        self.observation_space = spaces.Box(low=0.0, high=20.0, shape=(1,), dtype=np.float32)
+
+        # 9-D observation: [target_peaking_norm, noise_norm, power_norm, eye_norm,
+        #                   corner_tt, corner_ss, corner_ff, corner_sf, corner_fs]
+        self.observation_space = spaces.Box(
+            low=np.zeros(self.OBS_DIM, dtype=np.float32),
+            high=np.ones(self.OBS_DIM, dtype=np.float32),
+            dtype=np.float32
+        )
         self.target_peaking_db = None
 
         # Resolve surrogate availability (lazy — each subprocess loads its own copy)
@@ -142,6 +164,20 @@ class TransistorEqualizerEnv(gym.Env):
             self.use_surrogate = bool(use_surrogate)
             if self.use_surrogate:
                 _try_load_surrogate()
+
+    def _build_obs(self) -> np.ndarray:
+        """Build the 9-D normalised observation vector for the current episode state."""
+        corner_str, temp, vdd = self.current_corner
+        corner_one_hot = np.zeros(5, dtype=np.float32)
+        corner_one_hot[self._CORNER_IDX.get(corner_str, 0)] = 1.0
+
+        obs = np.array([
+            float(self.target_peaking_db) / 12.0,          # normalised [0,1] over 0-12 dB
+            self.noise_limit_mvrms / 1.5,                  # normalised (1.0 = spec limit)
+            self.power_limit_mw / 15.0,                    # normalised
+            self.eye_height_limit_mv / 200.0,              # normalised
+        ], dtype=np.float32)
+        return np.concatenate([obs, corner_one_hot])
 
     def _rescale_action(self, action):
         return [lo + (a + 1) / 2 * (hi - lo)
@@ -158,7 +194,7 @@ class TransistorEqualizerEnv(gym.Env):
         else:
             self.current_corner = _PVT_CORNERS[0]  # TT always
 
-        return np.array([self.target_peaking_db], dtype=np.float32), {}
+        return self._build_obs(), {}
 
     def step(self, action):
         Wn, Rs, Cs, Itail, RL, Rdfe = self._rescale_action(action)
@@ -176,7 +212,7 @@ class TransistorEqualizerEnv(gym.Env):
                     spice_result = simulate_transistor_fast(
                         Wn, Rs, Cs, Itail, RL, Rdfe,
                         corner=corner_str, temp=temp, vdd=vdd,
-                        topology=self.topology
+                        topology=self.topology, compute_hd3=True,
                     )
                     _append_transistor_record(
                         {'Wn_um': Wn, 'Rs_ohm': Rs, 'Cs_farad': Cs,
@@ -189,31 +225,36 @@ class TransistorEqualizerEnv(gym.Env):
                 result = simulate_transistor_fast(
                     Wn, Rs, Cs, Itail, RL, Rdfe,
                     corner=corner_str, temp=temp, vdd=vdd,
-                    topology=self.topology
+                    topology=self.topology,
                 )
         except Exception:
-            return np.array([self.target_peaking_db], dtype=np.float32), -10.0, True, False, {}
+            return self._build_obs(), -10.0, True, False, {}
 
         # --- Reward computation ---
-        # Use absolute dB span (3-10 dB = 7 dB) for normalization regardless of episode range.
-        # Quadratic penalty on peaking error gives sharper gradient near target and
-        # prevents degenerate solutions where the agent ignores the target.
-        _ABS_SPAN = 7.0  # full operating range width in dB
-        peaking_error_db = abs(result['peaking_db'] - self.target_peaking_db)
-        peaking_error_norm = (peaking_error_db / _ABS_SPAN) ** 2  # quadratic
+        # Peaking: quadratic penalty weighted 3× for sharp gradient near target.
+        # Use full spec range (3-12 dB = 9 dB) for normalization.
+        _ABS_SPAN = 9.0  # full spec range width in dB
+        peaking_error_db   = abs(result['peaking_db'] - self.target_peaking_db)
+        peaking_error_norm = (peaking_error_db / _ABS_SPAN) ** 2
 
-        noise_penalty = max(0.0, (result['noise_mvrms'] - self.noise_limit_mvrms) / self.noise_limit_mvrms)
-        hd3_penalty   = max(0.0, (result['hd3_db'] - self.hd3_limit_db) / abs(self.hd3_limit_db))
+        noise_penalty  = max(0.0, (result['noise_mvrms'] - self.noise_limit_mvrms) / self.noise_limit_mvrms)
+        hd3_penalty    = max(0.0, (result['hd3_db'] - self.hd3_limit_db) / abs(self.hd3_limit_db))
         power_penalty  = max(0.0, (result['power_mw'] - self.power_limit_mw) / self.power_limit_mw)
-        eye_penalty    = max(0.0, (self.eye_height_limit_mv - result['eye_height_proxy_mv']) / self.eye_height_limit_mv)
+        eye_h_penalty  = max(0.0, (self.eye_height_limit_mv - result['eye_height_proxy_mv']) / self.eye_height_limit_mv)
+
+        # Eye width penalty — spec: > 0.4 UI; only penalise when below limit
+        eye_w = result.get('eye_width_ui', 0.0)
+        eye_w_penalty = max(0.0, (self.eye_width_limit_ui - eye_w) / self.eye_width_limit_ui) if eye_w > 0 else 0.0
 
         area = estimate_area_2stage_mm2(Wn, Rs, Cs, RL, Rdfe)
         area_penalty = max(0.0, (area - self.area_limit_mm2) / self.area_limit_mm2)
 
-        # Peaking accuracy weighted 3x over constraint penalties
-        reward = -(3.0 * peaking_error_norm + noise_penalty + hd3_penalty + power_penalty + eye_penalty + area_penalty)
+        # Peaking accuracy weighted 3× over constraint penalties
+        reward = -(3.0 * peaking_error_norm
+                   + noise_penalty + hd3_penalty + power_penalty
+                   + eye_h_penalty + eye_w_penalty + area_penalty)
 
-        obs  = np.array([self.target_peaking_db], dtype=np.float32)
+        obs  = self._build_obs()
         info = {
             'Wn': float(Wn), 'Rs': float(Rs), 'Cs': float(Cs),
             'Itail': float(Itail), 'RL': float(RL), 'Rdfe': float(Rdfe),
@@ -223,6 +264,7 @@ class TransistorEqualizerEnv(gym.Env):
             'hd3_db':              float(result.get('hd3_db', -38.0)),
             'power_mw':            float(result.get('power_mw', 0.0)),
             'eye_height_proxy_mv': float(result['eye_height_proxy_mv']),
+            'eye_width_ui':        float(result.get('eye_width_ui', 0.0)),
             'area_mm2':            float(area),
             'topology':            self.topology,
             'corner':              corner_str,

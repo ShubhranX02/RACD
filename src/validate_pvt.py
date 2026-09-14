@@ -92,10 +92,13 @@ def run_pvt_validation(target_peaking_db=6.0, mode='racd', full_matrix=False):
         pwr = res['power_mw']
         eye = res['eye_height_proxy_mv']
 
-        ok = (h <= -30.0) and (n <= 1.5) and (pwr <= 15.0) and (eye >= 100.0) and (area <= 0.05)
+        peaking_ok = abs(p - target_peaking_db) <= 1.5  # within 1.5 dB of target
+        ok = peaking_ok and (h <= -30.0) and (n <= 1.5) and (pwr <= 15.0) and (eye >= 100.0) and (area <= 0.05)
         if ok:
             passes += 1
-        status = "PASS" if ok else ("MARGINAL" if h <= -28.0 else "FAIL")
+        # MARGINAL: only if HD3 is the single failing metric AND it's close
+        only_hd3_fail = (not ok) and peaking_ok and (n <= 1.5) and (pwr <= 15.0) and (eye >= 100.0) and (area <= 0.05)
+        status = "PASS" if ok else ("MARGINAL" if (only_hd3_fail and h <= -28.0) else "FAIL")
 
         print(f"{c.upper():<8} {v:<6.2f} {t:<6d} {p:<15.2f} {h:<14.1f} {n:<16.3f} {pwr:<14.2f} {eye:<14.1f} {area:<16.5f} {status}")
         results.append({

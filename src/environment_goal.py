@@ -1,4 +1,4 @@
-﻿"""
+"""
 environment_goal.py -- GoalEnv-compatible Gymnasium environment for SB3 HER.
 
 Wraps circuit_fast.simulate() in the Dict observation-space contract required
@@ -99,7 +99,7 @@ class GoalEqualizerEnv(gymnasium.Env):
 
         # Generous bounds for the goal dimensions so no clipping occurs
         goal_low  = np.array([0.0,   0.0,   0.0  ], dtype=np.float32)
-        goal_high = np.array([30.0,  10.0,  500.0 ], dtype=np.float32)
+        goal_high = np.array([30.0,  10.0,  3000.0], dtype=np.float32)
 
         self.observation_space = spaces.Dict({
             "observation":   spaces.Box(low=obs_low,  high=obs_high,  dtype=np.float32),

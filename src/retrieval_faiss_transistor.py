@@ -227,35 +227,40 @@ def synthesize_transistor_racd(
     )
 
     if candidates:
-        best_retrieved = candidates[0]
-        err = best_retrieved["_peaking_error_db"]
-        noise_ok = best_retrieved.get("noise_mvrms", 0.0) <= noise_limit_mvrms
-        power_ok = best_retrieved.get("power_mw", 0.0) <= power_limit_mw
-
-        # If retrieved design is already within strict tolerance, return verified sizing immediately
-        if err <= exact_match_threshold_db and noise_ok and power_ok:
-            elapsed_ms = (time.perf_counter() - t0) * 1000
-            return {
-                "source": "FAISS_VERIFIED_RETRIEVAL",
-                "elapsed_ms": elapsed_ms,
-                "target_peaking_db": target_peaking_db,
-                "sizing": {
-                    "Wn_um": best_retrieved["Wn_um"],
-                    "Rs_ohm": best_retrieved["Rs_ohm"],
-                    "Cs_farad": best_retrieved["Cs_farad"],
-                    "Itail_half_ua": best_retrieved["Itail_half_ua"],
-                    "RL_ohm": best_retrieved["RL_ohm"],
-                    "Rdfe_ohm": best_retrieved["Rdfe_ohm"],
-                },
-                "verified_spice_metrics": {
-                    "peaking_db": best_retrieved["peaking_db"],
-                    "noise_mvrms": best_retrieved["noise_mvrms"],
-                    "power_mw": best_retrieved["power_mw"],
-                    "eye_height_proxy_mv": best_retrieved.get("eye_height_proxy_mv", 0.0),
-                    "corner": best_retrieved.get("corner", corner),
-                },
-                "error_db": err,
-            }
+        from surrogate_transistor import simulate_transistor_surrogate
+        for cand in candidates:
+            err = cand["_peaking_error_db"]
+            noise_ok = cand.get("noise_mvrms", 0.0) <= noise_limit_mvrms
+            power_ok = cand.get("power_mw", 0.0) <= power_limit_mw
+            if err <= exact_match_threshold_db and noise_ok and power_ok:
+                # Neural surrogate gate: verifies that physical model agrees with database record
+                pred = simulate_transistor_surrogate(
+                    cand["Wn_um"], cand["Rs_ohm"], cand["Cs_farad"],
+                    cand["Itail_half_ua"], cand["RL_ohm"], cand["Rdfe_ohm"]
+                )
+                if abs(pred["peaking_db"] - target_peaking_db) <= 1.5:
+                    elapsed_ms = (time.perf_counter() - t0) * 1000
+                    return {
+                        "source": "FAISS_SURROGATE_VERIFIED_RETRIEVAL",
+                        "elapsed_ms": elapsed_ms,
+                        "target_peaking_db": target_peaking_db,
+                        "sizing": {
+                            "Wn_um": cand["Wn_um"],
+                            "Rs_ohm": cand["Rs_ohm"],
+                            "Cs_farad": cand["Cs_farad"],
+                            "Itail_half_ua": cand["Itail_half_ua"],
+                            "RL_ohm": cand["RL_ohm"],
+                            "Rdfe_ohm": cand["Rdfe_ohm"],
+                        },
+                        "verified_spice_metrics": {
+                            "peaking_db": cand["peaking_db"],
+                            "noise_mvrms": cand["noise_mvrms"],
+                            "power_mw": cand["power_mw"],
+                            "eye_height_proxy_mv": cand.get("eye_height_proxy_mv", 0.0),
+                            "corner": cand.get("corner", corner),
+                        },
+                        "error_db": err,
+                    }
 
     # Step 2: Fallback to Trained RL Policy
     try:

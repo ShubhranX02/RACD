@@ -29,7 +29,7 @@ except Exception:
 SYSTEM_CONTEXT = """You are a specification parser for an analog equalizer design tool.
 The tool designs a cascaded 2-stage CTLE + 1-Tap DFE in SkyWater 130 nm PDK for high-speed SerDes (PCIe Gen2 / 5 Gbps).
 Extract the following engineering targets from the user request:
-- target_peaking_db: High-frequency peaking boost, must be between 3.0 and 10.0 dB (default 7.5 dB).
+- target_peaking_db: High-frequency peaking boost, must be between 3.0 and 12.0 dB (default 8.0 dB).
 - noise_limit_mvrms: Maximum acceptable input-referred noise (default 1.5 mVrms).
 - power_limit_mw: Maximum allowable power consumption (default 15.0 mW).
 - eye_height_limit_mv: Minimum eye opening (default 100.0 mV).
@@ -54,7 +54,7 @@ def parse_spec_request(user_text: str) -> Dict[str, float]:
             text = re.sub(r'```(?:json)?', '', text).strip()
             spec = json.loads(text)
             return {
-                "target_peaking_db": max(3.0, min(10.0, float(spec.get("target_peaking_db", 7.5)))),
+                "target_peaking_db": max(3.0, min(12.0, float(spec.get("target_peaking_db", 8.0)))),
                 "noise_limit_mvrms": float(spec.get("noise_limit_mvrms", 1.5)),
                 "power_limit_mw": float(spec.get("power_limit_mw", 15.0)),
                 "eye_height_limit_mv": float(spec.get("eye_height_limit_mv", 100.0)),
@@ -66,8 +66,8 @@ def parse_spec_request(user_text: str) -> Dict[str, float]:
     m_peak = re.search(r'(\d+\.?\d*)\s*(?:db|peaking|boost)', user_text, re.IGNORECASE)
     if not m_peak:
         m_peak = re.search(r'(?:peaking|boost|around)\s*(\d+\.?\d*)', user_text, re.IGNORECASE)
-    target_peaking = float(m_peak.group(1)) if m_peak else 7.5
-    target_peaking = max(3.0, min(10.0, target_peaking))
+    target_peaking = float(m_peak.group(1)) if m_peak else 8.0
+    target_peaking = max(3.0, min(12.0, target_peaking))
 
     m_noise = re.search(r'(?:noise|strict)\s*(?:under|below|of)?\s*(\d+\.?\d*)', user_text, re.IGNORECASE)
     noise = float(m_noise.group(1)) if m_noise else 1.5
@@ -208,7 +208,25 @@ def synthesize_from_prompt(
         print(f"[4/4] Skipped SPICE sign-off.")
 
     print("=" * 80)
-    print("  SYNTHESIS COMPLETE — 100% SPEC COMPLIANT")
+    if spice_metrics is not None:
+        # Evaluate compliance against extracted specs
+        err_db = abs(spice_metrics["peaking_db"] - specs["target_peaking_db"])
+        noise_ok  = spice_metrics["noise_mvrms"]  <= specs["noise_limit_mvrms"]
+        power_ok  = spice_metrics["power_mw"]    <= specs["power_limit_mw"]
+        eye_ok    = spice_metrics["eye_height_proxy_mv"] >= specs["eye_height_limit_mv"]
+        peaking_ok = err_db <= 1.5
+        all_ok = peaking_ok and noise_ok and power_ok and eye_ok
+        if all_ok:
+            print("  SYNTHESIS COMPLETE — ALL SPECS MET ✓")
+        else:
+            failures = []
+            if not peaking_ok:  failures.append(f"Peaking error={err_db:.2f}dB")
+            if not noise_ok:    failures.append(f"Noise={spice_metrics['noise_mvrms']:.3f}mVrms")
+            if not power_ok:    failures.append(f"Power={spice_metrics['power_mw']:.2f}mW")
+            if not eye_ok:      failures.append(f"Eye={spice_metrics['eye_height_proxy_mv']:.1f}mV")
+            print(f"  SYNTHESIS COMPLETE — MARGINAL: {', '.join(failures)}")
+    else:
+        print("  SYNTHESIS COMPLETE — SPICE validation skipped")
     print("=" * 80)
 
     return {

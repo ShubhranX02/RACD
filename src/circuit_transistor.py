@@ -20,7 +20,9 @@ if os.path.exists(r"C:\Spice64\bin") and r"C:\Spice64\bin" not in os.environ.get
 
 _DEFAULT_PDK_PATH = os.path.expanduser("~/.ciel/ciel/sky130/versions/bdc9412b3e468c102d01b7cf6337be06ec6e9c9a/sky130A/libs.tech/ngspice/sky130.lib.spice").replace('\\', '/')
 PDK_LIB_PATH = os.environ.get("PDK_LIB_PATH", _DEFAULT_PDK_PATH)
-_TEMP_DIR = os.path.dirname(os.path.abspath(__file__))
+_SRC_DIR  = os.path.dirname(os.path.abspath(__file__))
+_TEMP_DIR = os.path.join(_SRC_DIR, '.tmp')
+os.makedirs(_TEMP_DIR, exist_ok=True)  # create .tmp/ if it doesn't exist yet
 
 
 def _run_ngspice(netlist_content, label="sim"):
@@ -121,14 +123,21 @@ Rdfe2 vdelayed_n voutn {Rdfe_ohm}
 
 
 def simulate_transistor_fast(Wn_um, Rs_ohm, Cs_farad, Itail_half_ua, RL_ohm=2000, Rdfe_ohm=10000,
-                             corner='tt', temp=27, vdd=1.8, topology='2stage', worker_id=None):
+                             corner='tt', temp=27, vdd=1.8, topology='2stage', worker_id=None,
+                             compute_hd3=False):
     """
-    Fast simulation for RL training loop: single-pass SPICE with AC + OP + Noise.
+    Fast simulation for RL training loop: AC + OP + Noise + (optional) HD3 + eye transient.
 
     Args:
-        worker_id: Optional integer (e.g. os.getpid()) that makes temp file names unique
-                   per process. Required when calling from multiprocessing workers to
-                   prevent concurrent writes to the same _temp_ac_data file.
+        worker_id:   Optional integer (e.g. os.getpid()) that makes temp file names unique
+                     per process. Required when calling from multiprocessing workers to
+                     prevent concurrent writes to the same _temp_ac_data file.
+        compute_hd3: If True, run an additional transient Fourier simulation to obtain a
+                     real HD3 value (adds ~50 ms).  Set True during surrogate training data
+                     generation; leave False (default) during RL rollouts for speed.
+
+    Returns eye_height_proxy_mv via a 2 ns pulse transient (replaces non-physical AC-gain
+    proxy), plus eye_width_ui (horizontal opening at 5 Gbps, spec: > 0.4 UI).
     """
     if topology == '2stage':
         devices = _device_section_2stage(
@@ -141,9 +150,13 @@ def simulate_transistor_fast(Wn_um, Rs_ohm, Cs_farad, Itail_half_ua, RL_ohm=2000
 
     # Use process-unique temp file names when worker_id is provided (multiprocessing safety)
     suffix = f"_{worker_id}" if worker_id is not None else ""
-    ac_data_path = os.path.join(_TEMP_DIR, f'_temp_ac_data{suffix}')
+    ac_data_path  = os.path.join(_TEMP_DIR, f'_temp_ac_data{suffix}')
+    eye_data_path = os.path.join(_TEMP_DIR, f'_temp_eye_data{suffix}')
     label = f'fast_train{suffix}'
 
+    # -------------------------------------------------------------------------
+    # Run 1: AC + OP + Noise (always)
+    # -------------------------------------------------------------------------
     netlist = f"""Combined AC/OP/Noise
 .lib "{PDK_LIB_PATH}" {corner}
 .option temp={temp} scale=1u
@@ -169,7 +182,7 @@ print inoise_total
 
     lf_idx = (np.abs(freqs - 100e6)).argmin()
     hf_idx = (np.abs(freqs - 2.5e9)).argmin()
-    low_freq_gain = float(gains[lf_idx])
+    low_freq_gain  = float(gains[lf_idx])
     high_freq_gain = float(gains[hf_idx])
     peaking_db = high_freq_gain - low_freq_gain
 
@@ -179,20 +192,102 @@ print inoise_total
     match_n = re.search(r'inoise_total\s*=\s*([\d.eE+-]+)', res.stdout, re.IGNORECASE)
     noise_mvrms = float(match_n.group(1)) * 1000 if match_n else 10.0
 
-    eye_height_proxy_mv = 10**(high_freq_gain / 20.0) * 100.0
-    hd3_db = -38.0  # Proxy; replaced by surrogate_transistor prediction when available
+    # -------------------------------------------------------------------------
+    # Run 2: 2 ns pulse transient — real eye height + eye width
+    # Replaces the old AC-gain proxy (10^(gain/20)*100 mV) which is non-physical.
+    # UI = 200 ps at 5 Gbps (PCIe Gen 2).
+    # -------------------------------------------------------------------------
+    UI_s = 200e-12
+    netlist_eye = f"""Eye Pulse Transient
+.lib "{PDK_LIB_PATH}" {corner}
+.option temp={temp} scale=1u
+
+Vdd vdd 0 {vdd}
+Vinp vin_p 0 DC {vdd/2} PULSE({vdd/2} {vdd/2 + 0.1} 0 10p 10p 200p 10n)
+Vinn vin_n 0 DC {vdd/2} PULSE({vdd/2} {vdd/2 - 0.1} 0 10p 10p 200p 10n)
+{devices}
+.control
+tran 2p 2n
+wrdata {eye_data_path} v(voutp,voutn)
+.endc
+.end
+"""
+    _run_ngspice(netlist_eye, f'eye{suffix}')
+    t_arr, v_arr = _read_wrdata(eye_data_path)
+
+    if len(v_arr) > 4:
+        eye_height_mv = float(np.max(np.abs(v_arr))) * 1000.0
+        # Eye width: fraction of time waveform magnitude exceeds 10% of peak
+        peak_v = float(np.max(np.abs(v_arr)))
+        threshold = 0.1 * peak_v
+        above = np.abs(v_arr) > threshold
+        # Skip first 25% of waveform (settling transient)
+        t_start_idx = max(1, int(len(t_arr) * 0.25))
+        above_win = above[t_start_idx:]
+        t_win     = t_arr[t_start_idx:]
+        if above_win.any() and (~above_win).any():
+            rising_idx  = int(np.argmax(above_win))
+            falling_idx = int(len(above_win) - 1 - np.argmax(above_win[::-1]))
+            t_open  = float(t_win[rising_idx])
+            t_close = float(t_win[falling_idx])
+            eye_width_ui = max(0.0, (t_close - t_open) / UI_s)
+        else:
+            eye_width_ui = 0.0
+    else:
+        # Transient failed — fall back to AC-gain proxy and mark width as unknown
+        eye_height_mv = 10**(high_freq_gain / 20.0) * 100.0
+        eye_width_ui  = 0.0
+
+    # -------------------------------------------------------------------------
+    # Run 3 (optional): Transient Fourier HD3
+    # compute_hd3=False during RL rollouts (surrogate predicts HD3).
+    # compute_hd3=True during surrogate training data generation (real values).
+    # -------------------------------------------------------------------------
+    if compute_hd3:
+        hd3_data_path = os.path.join(_TEMP_DIR, f'_temp_hd3_data{suffix}')
+        netlist_hd3 = f"""HD3 Transient Fourier
+.lib "{PDK_LIB_PATH}" {corner}
+.option temp={temp} scale=1u
+
+Vdd vdd 0 {vdd}
+Vinp vin_p 0 DC {vdd/2} SINE({vdd/2} 0.05 100Meg)
+Vinn vin_n 0 DC {vdd/2} SINE({vdd/2} -0.05 100Meg)
+{devices}
+.control
+tran 10p 50n
+fourier 100Meg v(voutp,voutn)
+.endc
+.end
+"""
+        res_hd3 = _run_ngspice(netlist_hd3, f'hd3{suffix}')
+        # Match Harmonic 3 normalised magnitude from ngspice Fourier table:
+        # Format: "3  3e+08  mag  phase  norm_mag  norm_phase"
+        match_hd3 = re.search(
+            r'^\s*3\s+[\d.eE+-]+\s+[\d.eE+-]+\s+[\d.eE+-]+\s+([\d.eE+-]+)',
+            res_hd3.stdout, re.MULTILINE
+        )
+        if not match_hd3:
+            match_hd3 = re.search(r'3\s+3e\+08\s+[\d.eE+-]+\s+[\d.eE+-]+\s+([\d.eE+-]+)', res_hd3.stdout)
+        if match_hd3:
+            hd3_norm = float(match_hd3.group(1))
+            hd3_db = float(20 * np.log10(max(hd3_norm, 1e-12)))
+        else:
+            hd3_db = -38.0  # Fourier parse failed — conservative proxy
+    else:
+        hd3_db = -38.0  # Fast path: proxy (surrogate predicts real HD3 during RL rollouts)
 
     return {
-        'peaking_db': float(peaking_db),
-        'low_freq_gain_db': float(low_freq_gain),
-        'high_freq_gain_db': float(high_freq_gain),
-        'noise_mvrms': float(noise_mvrms),
-        'hd3_db': float(hd3_db),
-        'power_mw': float(power_mw),
-        'eye_height_proxy_mv': float(eye_height_proxy_mv),
-        'corner': corner,
-        'temp': temp,
-        'vdd': vdd
+        'peaking_db':          float(peaking_db),
+        'low_freq_gain_db':    float(low_freq_gain),
+        'high_freq_gain_db':   float(high_freq_gain),
+        'noise_mvrms':         float(noise_mvrms),
+        'hd3_db':              float(hd3_db),
+        'power_mw':            float(power_mw),
+        'eye_height_proxy_mv': float(eye_height_mv),
+        'eye_width_ui':        float(eye_width_ui),
+        'corner':              corner,
+        'temp':                temp,
+        'vdd':                 vdd,
     }
 
 

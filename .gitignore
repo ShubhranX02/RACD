@@ -4,5 +4,6 @@ __pycache__/
 *.pyc
 _temp_*
 **/_temp_*
+src/.tmp/
 models/*_ckpt*
 models/*_vecnorm.pkl

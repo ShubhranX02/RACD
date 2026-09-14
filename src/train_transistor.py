@@ -339,9 +339,9 @@ if __name__ == '__main__':
             'MlpPolicy', vec_env,
             verbose=0,
             learning_rate=3e-4,
-            n_steps=128,           # 128 × 256 envs = 32,768 diverse samples/update
-            batch_size=2048,       # 16 mini-batches/epoch
-            n_epochs=10,           # matches the 1M SubprocVecEnv run that worked
+            n_steps=32,            # 32 × 256 envs = 8,192 samples/update (4× faster gradient steps)
+            batch_size=512,        # 16 mini-batches/epoch
+            n_epochs=4,            # reduced to avoid CPU-gradient bottleneck; ~same data efficiency
             gamma=0.99,
             ent_coef=0.01,
             device=_ppo_device,
