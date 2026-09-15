@@ -7,6 +7,12 @@ import tempfile
 # Ensure ngspice is discoverable if installed in standard location
 if os.path.exists(r"C:\Spice64\bin") and r"C:\Spice64\bin" not in os.environ.get("PATH", ""):
     os.environ["PATH"] = r"C:\Spice64\bin;" + os.environ.get("PATH", "")
+_local_bin = os.path.expanduser("~/.local/bin")
+if os.path.exists(_local_bin) and _local_bin not in os.environ.get("PATH", "").split(os.pathsep):
+    os.environ["PATH"] = _local_bin + os.pathsep + os.environ.get("PATH", "")
+_spice_share = os.path.expanduser("~/.local/share/ngspice")
+if os.path.exists(_spice_share) and "SPICE_LIB_DIR" not in os.environ:
+    os.environ["SPICE_LIB_DIR"] = _spice_share
 
 # Fixed lossy channel model (approximates PCB trace loss ahead of the
 # equalizer). NOT tunable by the RL agent -- represents a given physical

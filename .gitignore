@@ -7,3 +7,11 @@ _temp_*
 src/.tmp/
 models/*_ckpt*
 models/*_vecnorm.pkl
+
+# LaTeX
+*.aux
+*.log
+*.out
+*.toc
+missfont.log
+
